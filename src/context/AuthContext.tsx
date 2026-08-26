@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, googleAuthProvider, testConnection } from '../lib/firebase.ts';
 import { handleFirestoreError, OperationType } from '../lib/firebaseErrors.ts';
+import { getAuthErrorMessage, getFirebaseAuthErrorCode } from '../lib/authErrors.ts';
 
 export interface PilotProfile {
   uid: string;
@@ -48,6 +49,8 @@ interface AuthContextType {
   pilotProfile: PilotProfile | null;
   loading: boolean;
   syncWarning: string | null;
+  authError: string | null;
+  isSigningIn: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   recordRunStats: (runData: {
@@ -68,6 +71,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pilotProfile, setPilotProfile] = useState<PilotProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncWarning, setSyncWarning] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const signInInProgress = useRef(false);
 
   useEffect(() => {
     testConnection();
@@ -129,10 +135,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
+    if (signInInProgress.current) return;
+    signInInProgress.current = true;
+    setIsSigningIn(true);
+    setAuthError(null);
     try {
       await signInWithPopup(auth, googleAuthProvider);
     } catch (error) {
-      console.error('Google Sign In failed:', error);
+      const code = getFirebaseAuthErrorCode(error);
+      setAuthError(getAuthErrorMessage(error));
+      if (import.meta.env.DEV) {
+        console.error('Google Sign-In failed.', { code: code ?? 'unknown' });
+      }
+    } finally {
+      signInInProgress.current = false;
+      setIsSigningIn(false);
     }
   };
 
@@ -226,6 +243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pilotProfile,
         loading,
         syncWarning,
+        authError,
+        isSigningIn,
         signInWithGoogle,
         signOut,
         recordRunStats,

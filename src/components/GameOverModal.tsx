@@ -24,7 +24,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onRestart,
   onExit,
 }) => {
-  const { user, recordRunStats, signInWithGoogle } = useAuth();
+  const { user, authError, isSigningIn, recordRunStats, signInWithGoogle } = useAuth();
   const [synced, setSynced] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -111,9 +111,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               ) : (
                 <button
                   onClick={signInWithGoogle}
-                  className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono underline cursor-pointer"
+                  disabled={isSigningIn}
+                  aria-busy={isSigningIn}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 disabled:text-slate-500 disabled:cursor-not-allowed font-mono underline cursor-pointer"
                 >
-                  Sign in to save score
+                  {isSigningIn ? 'Signing in...' : 'Sign in to save score'}
                 </button>
               )}
             </div>
@@ -158,6 +160,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <span className="text-2xl font-black text-amber-400 font-mono tracking-tight">{stats.score.toLocaleString()}</span>
             </div>
           </div>
+
+          {authError && <div role="alert" className="rounded-lg border border-red-500/50 bg-red-950/60 p-3 text-center text-sm text-red-100">{authError}</div>}
 
           {/* Action buttons */}
           <div className="space-y-2 pt-2">
