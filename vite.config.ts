@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/Viper-The-Rebel/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
