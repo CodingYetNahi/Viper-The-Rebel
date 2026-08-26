@@ -32,7 +32,13 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <main className={`w-full ${gameState === 'MENU' ? 'min-h-screen overflow-y-auto' : 'h-screen overflow-hidden'} bg-slate-950 text-slate-100 font-sans select-none`}>
+      <main
+        className={`w-full ${
+          gameState === 'MENU'
+            ? 'min-h-screen overflow-x-hidden'
+            : 'h-[100dvh] overflow-hidden'
+        } bg-slate-950 text-slate-100 font-sans select-none`}
+      >
         {gameState === 'MENU' ? (
           <MainMenu
             onStartGame={handleStartGame}
