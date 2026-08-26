@@ -16,7 +16,7 @@ interface MainMenuProps {
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpdateSettings }) => {
-  const { user, pilotProfile, loading: authLoading, syncWarning, signInWithGoogle, signOut } = useAuth();
+  const { user, pilotProfile, loading: authLoading, syncWarning, authError, isSigningIn, signInWithGoogle, signOut } = useAuth();
   const [selectedShipId, setSelectedShipId] = useState<string>('VIPER');
   const [selectedMode, setSelectedMode] = useState<GameMode>('ENDLESS');
   const [activeTab, setActiveTab] = useState<'PLAY' | 'HOW_TO_PLAY' | 'AUDIO'>('PLAY');
@@ -50,6 +50,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
 
       <div className="relative z-10 w-full max-w-4xl space-y-6">
         {syncWarning && <div role="status" className="rounded-lg border border-amber-500/50 bg-amber-950/60 p-2 text-center text-xs text-amber-200">{syncWarning}</div>}
+        {authError && <div role="alert" className="rounded-lg border border-red-500/50 bg-red-950/60 p-3 text-center text-sm text-red-100">{authError}</div>}
         {/* Top Pilot Bar with Firebase Auth & Leaderboard Trigger */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md shadow-lg">
           <div className="flex items-center gap-3">
@@ -124,9 +125,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
               <button
                 id="btn-auth-signin"
                 onClick={signInWithGoogle}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-400 hover:from-cyan-400 hover:to-sky-300 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-cyan-500/20 transition-all"
+                disabled={isSigningIn}
+                aria-busy={isSigningIn}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-400 hover:from-cyan-400 hover:to-sky-300 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-cyan-500/20 transition-all"
               >
-                <LogIn className="w-3.5 h-3.5" /> GOOGLE SIGN IN
+                {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />} {isSigningIn ? 'SIGNING IN...' : 'GOOGLE SIGN IN'}
               </button>
             )}
           </div>
