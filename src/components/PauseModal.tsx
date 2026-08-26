@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, RotateCcw, Home, Volume2, Shield } from 'lucide-react';
 import { GameSettings, PlayerStats } from '../types';
 import { SoundSettings } from './SoundSettings';
+import { ControlSchemeSelector } from './ControlSchemeSelector';
 
 interface PauseModalProps {
   stats: PlayerStats;
@@ -46,6 +47,7 @@ export const PauseModal: React.FC<PauseModalProps> = ({
 
         {/* Audio controls */}
         <SoundSettings settings={settings} onUpdateSettings={onUpdateSettings} />
+        <ControlSchemeSelector settings={settings} onUpdateSettings={onUpdateSettings} />
 
         {/* Action buttons */}
         <div className="flex flex-col gap-2.5 pt-2">

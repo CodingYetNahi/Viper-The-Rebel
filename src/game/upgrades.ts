@@ -19,7 +19,6 @@ const ALL_PASSIVE_TYPES: PassiveType[] = [
   'DAMAGE',
   'MAGNET_RADIUS',
   'CRIT_RATE',
-  'DASH_COOLDOWN',
 ];
 
 export function generateUpgradeOptions(
@@ -133,24 +132,24 @@ export function generateUpgradeOptions(
     options.push({
       id: 'HEAL_FULL',
       title: 'Nanite Emergency Repair',
-      description: 'Fully restores Ship Shield and repairs 65% Hull Integrity.',
+      description: 'Fully restores Ship Shield and repairs 40% Hull Integrity.',
       type: 'HEAL_FULL',
       targetId: 'HEAL',
       rarity: 'COMMON',
       icon: 'ShieldPlus',
       color: '#10b981',
-      statChange: '+65% HP / Full Shield',
+      statChange: '+40% HP / Full Shield',
     });
     options.push({
       id: 'OVERCHARGE',
       title: 'Capacitor Overcharge',
-      description: 'Awards +1,500 Score and permanently grants +25 Max Shield.',
+      description: 'Awards +1,500 Score and grants +15 Max Shield, up to the defensive cap.',
       type: 'OVERCHARGE',
       targetId: 'OVERCHARGE',
       rarity: 'RARE',
       icon: 'Sparkles',
       color: '#06b6d4',
-      statChange: '+25 Max Shield / +1,500 Score',
+      statChange: '+15 Max Shield / +1,500 Score',
     });
   }
 
@@ -191,7 +190,7 @@ export function selectAutomaticUpgrade(context: UpgradeSelectionContext, random:
   const hasOffence = context.activeWeapons.length > 0;
   const weighted = pool.map(option => {
     let weight = UPGRADE_BASE_WEIGHTS[option.type];
-    if (lowHealth && (option.type === 'HEAL_FULL' || option.targetId === 'MAX_HEALTH' || option.targetId === 'SHIELD_REGEN' || option.id === 'OVERCHARGE')) weight *= 20;
+    if (lowHealth && (option.type === 'HEAL_FULL' || option.targetId === 'MAX_HEALTH' || option.targetId === 'SHIELD_REGEN' || option.id === 'OVERCHARGE')) weight *= 7;
     if (context.level <= 5 && (option.type === 'NEW_WEAPON' || option.type === 'UPGRADE_WEAPON')) weight *= 2.2;
     if (!hasOffence && !option.type.includes('WEAPON')) weight *= 0.05;
     weight *= repetitionMultiplier(option.targetId, context.history);

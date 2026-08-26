@@ -12,7 +12,7 @@ import {
   WeaponItem, 
   WeaponType, UpgradeOption
 } from '../types';
-import { BALANCE, canSpawnEnemy, enemyCapAt, spawnIntervalAt } from './balance';
+import { BALANCE, bossStats, canSpawnEnemy, capDefensiveStats, enemyCapAt, enemyDamageMultiplier, enemyHealthMultiplier, enemySpeedMultiplier, spawnIntervalAt } from './balance';
 import { SHIPS } from './ships';
 import { createWeapon, evolveWeapon } from './weapons';
 import { createPassive } from './passives';
@@ -61,6 +61,7 @@ export class GameEngine {
     bloomFX: true,
     autoAim: true,
     particleDensity: 'HIGH',
+    controlScheme: 'JOYSTICK',
   };
 
   // Inputs
@@ -88,6 +89,8 @@ export class GameEngine {
   private upgradeHistory: string[] = [];
   private lockedTargetId: number | null = null;
   private targetLockUntil = 0;
+  private colossusDamageCharge = 0;
+  private lastDefensiveShockwave = -10;
 
   private boundKeyDown: (e: KeyboardEvent) => void = () => {};
   private boundKeyUp: (e: KeyboardEvent) => void = () => {};
@@ -124,13 +127,9 @@ export class GameEngine {
       maxShield: ship.baseShield,
       shieldRegenRate: ship.shieldRegen,
       lastShieldHitTime: 0,
-      speed: ship.speed * (ship.perk.type === 'SPEED' ? ship.perk.value : 1),
-      dashCooldown: ship.dashCooldown,
-      dashDuration: 0.22,
-      isDashing: false,
-      dashTimer: 0,
-      lastDashTime: -10,
+      speed: ship.speed,
       invulnerableTimer: 0,
+      damageReduction: 0,
       magnetRadius: 130,
       critChance: ship.critChance,
       critMultiplier: ship.critMultiplier,
@@ -203,7 +202,6 @@ export class GameEngine {
     let attackSpeedBonus = 1;
     let magnetBonus = 1;
     let critChanceBonus = 0;
-    let dashCooldownReduction = 1;
 
     for (const p of this.passives) {
       const multiplier = p.level * p.statBonusPerLevel;
@@ -216,26 +214,27 @@ export class GameEngine {
       if (p.id === 'CRIT_RATE') {
         critChanceBonus += multiplier;
       }
-      if (p.id === 'DASH_COOLDOWN') dashCooldownReduction *= Math.max(0.4, 1 - multiplier);
     }
 
     // Apply ship perks
     if (this.currentShip.perk.type === 'SPEED') speedBonus *= this.currentShip.perk.value;
     if (this.currentShip.perk.type === 'SHIELD') shieldRegenBonus *= this.currentShip.perk.value;
+    if (this.currentShip.perk.type === 'DEFENSIVE_SHOCKWAVE') maxHealthBonus *= this.currentShip.perk.value;
 
     const prevMaxHealth = this.player.maxHealth;
-    this.player.maxHealth = Math.round(this.currentShip.baseHealth * maxHealthBonus);
+    this.player.maxHealth = Math.round(this.currentShip.baseHealth * maxHealthBonus * this.balance.hullMultiplier);
     if (this.player.maxHealth > prevMaxHealth) {
       this.player.health += this.player.maxHealth - prevMaxHealth;
     }
 
     this.player.speed = this.currentShip.speed * speedBonus;
-    this.player.shieldRegenRate = this.currentShip.shieldRegen * shieldRegenBonus;
+    const defensive = capDefensiveStats(this.currentShip.shieldRegen * shieldRegenBonus, 0);
+    this.player.shieldRegenRate = defensive.shieldRegen;
+    this.player.damageReduction = defensive.damageReduction;
     this.player.damageMultiplier = damageBonus;
     this.player.fireRateMultiplier = attackSpeedBonus;
     this.player.magnetRadius = 130 * magnetBonus;
     this.player.critChance = Math.min(0.95, this.currentShip.critChance + critChanceBonus);
-    this.player.dashCooldown = this.currentShip.dashCooldown * dashCooldownReduction;
   }
 
   public applyUpgrade(optionId: string, targetId: string) {
@@ -261,12 +260,12 @@ export class GameEngine {
         passive.level += 1;
       }
     } else if (optionId === 'HEAL_FULL') {
-      this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.65);
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + this.player.maxHealth * 0.4);
       this.player.shield = this.player.maxShield;
       this.particles.addShockwave(this.player.x, this.player.y, '#10b981', 160);
       sound.playPowerup();
     } else if (optionId === 'OVERCHARGE') {
-      this.player.maxShield += 25;
+      this.player.maxShield = Math.min(this.currentShip.baseShield + 75, this.player.maxShield + 15);
       this.player.shield = this.player.maxShield;
       this.player.score += 1500;
       this.particles.addShockwave(this.player.x, this.player.y, '#06b6d4', 160);
@@ -274,16 +273,12 @@ export class GameEngine {
     }
 
     this.recalculatePlayerStats();
-    this.isPaused = false;
   }
 
   // --- INPUT HANDLING ---
   private bindEvents() {
     this.boundKeyDown = (e: KeyboardEvent) => {
       this.keys[e.code] = true;
-      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-        this.triggerDash();
-      }
     };
 
     this.boundKeyUp = (e: KeyboardEvent) => {
@@ -302,32 +297,6 @@ export class GameEngine {
 
     window.addEventListener('keydown', this.boundKeyDown);
     window.addEventListener('keyup', this.boundKeyUp);
-  }
-
-  public triggerDash() {
-    if (!this.isRunning || this.isPaused) return;
-    const now = this.gameTime;
-    if (now - this.player.lastDashTime >= this.player.dashCooldown && !this.player.isDashing) {
-      this.player.isDashing = true;
-      this.player.dashTimer = this.player.dashDuration;
-      this.player.lastDashTime = now;
-      this.player.invulnerableTimer = this.player.dashDuration + 0.08;
-
-      sound.playDash();
-      this.triggerScreenShake(4, 0.15);
-
-      // Dash Shockwave for Colossus or heavy perk
-      if (this.currentShip.perk.type === 'SHOCKWAVE') {
-        this.particles.addShockwave(this.player.x, this.player.y, this.currentShip.color, 140);
-        // Damage nearby enemies during dash shockwave
-        for (const enemy of this.enemies) {
-          const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
-          if (dist < 140) {
-            this.damageEnemy(enemy, 60, true);
-          }
-        }
-      }
-    }
   }
 
   public triggerScreenShake(intensity: number, duration: number) {
@@ -352,12 +321,17 @@ export class GameEngine {
   };
 
   public pause() {
+    if (this.isPaused) return;
     this.isPaused = true;
+    this.clearMovementInput();
+    if (this.animationFrameId !== null) { cancelAnimationFrame(this.animationFrameId); this.animationFrameId = null; }
   }
 
   public resume() {
+    if (!this.isRunning || !this.isPaused) return;
     this.isPaused = false;
     this.lastTimestamp = performance.now();
+    if (this.animationFrameId === null) this.animationFrameId = requestAnimationFrame(this.loop);
   }
 
   public stop() {
@@ -370,6 +344,8 @@ export class GameEngine {
     window.removeEventListener('keyup', this.boundKeyUp);
     sound.stopMusic();
   }
+
+  public clearMovementInput() { this.joystickVector = { x: 0, y: 0 }; this.keys = {}; this.player.vx = 0; this.player.vy = 0; }
 
   // --- UPDATE LOGIC ---
   private update(dt: number) {
@@ -443,21 +419,9 @@ export class GameEngine {
       my /= len;
     }
 
-    // Dash speed multiplier
-    let currentSpeed = this.player.speed;
-    if (this.player.isDashing) {
-      currentSpeed *= 3.2;
-      this.player.dashTimer -= dt;
-      this.particles.addThrusterFlame(this.player.x, this.player.y, this.player.angle, this.currentShip.color, 2);
-
-      if (this.player.dashTimer <= 0) {
-        this.player.isDashing = false;
-      }
-    }
-
     // Apply movement with acceleration/friction
-    this.player.vx = mx * currentSpeed;
-    this.player.vy = my * currentSpeed;
+    this.player.vx = mx * this.player.speed;
+    this.player.vy = my * this.player.speed;
 
     this.player.x += this.player.vx * dt;
     this.player.y += this.player.vy * dt;
@@ -738,16 +702,16 @@ export class GameEngine {
         this.spawnBoss(bossTypes[index]);
       }
     });
-    if (this.spawnTimer >= spawnIntervalAt(this.difficulty,this.gameTime) && this.enemies.length < enemyCapAt(this.difficulty,this.gameTime) && !this.enemies.some(e=>e.isBoss)) {
+    if (this.spawnTimer >= spawnIntervalAt(this.difficulty,this.gameTime,this.player.level,this.gameMode) && this.enemies.length < enemyCapAt(this.difficulty,this.gameTime,this.player.level,this.gameMode) && !this.enemies.some(e=>e.isBoss)) {
       this.spawnTimer = 0; this.spawnEnemyGroup(timeMinutes);
     }
   }
 
   private spawnEnemyGroup(timeMinutes: number) {
     const types: EnemyType[] = ['SWARMER'];
-    if (canSpawnEnemy(this.difficulty,'CHARGER',this.gameTime)) types.push('CHARGER');
-    if (canSpawnEnemy(this.difficulty,'SHOOTER',this.gameTime) && timeMinutes > 1.2) types.push('SHOOTER');
-    if (canSpawnEnemy(this.difficulty,'HEAVY',this.gameTime) && timeMinutes > 2.0) types.push('HEAVY');
+    if (canSpawnEnemy(this.difficulty,'CHARGER',this.gameTime,this.player.level)) types.push('CHARGER');
+    if (canSpawnEnemy(this.difficulty,'SHOOTER',this.gameTime,this.player.level)) types.push('SHOOTER');
+    if (canSpawnEnemy(this.difficulty,'HEAVY',this.gameTime,this.player.level)) types.push('HEAVY');
 
     const chosenType = types[Math.floor(Math.random() * types.length)];
     const count = chosenType === 'SWARMER' ? Math.min(6, 2 + Math.floor(timeMinutes)) : 1;
@@ -764,7 +728,9 @@ export class GameEngine {
     const x = Math.max(40, Math.min(this.arenaWidth - 40, this.player.x + Math.cos(angle) * distance));
     const y = Math.max(40, Math.min(this.arenaHeight - 40, this.player.y + Math.sin(angle) * distance));
 
-    const hpScale = 1 + timeMinutes * this.balance.healthGrowthPerMinute;
+    const hpScale = enemyHealthMultiplier(this.difficulty,this.gameTime,this.player.level,this.gameMode);
+    const damageScale = enemyDamageMultiplier(this.difficulty,this.player.level,this.gameMode);
+    const speedScale = enemySpeedMultiplier(this.difficulty,this.player.level);
     let enemy: Enemy;
 
     switch (type) {
@@ -779,8 +745,8 @@ export class GameEngine {
           type,
           health: Math.round(25 * hpScale),
           maxHealth: Math.round(25 * hpScale),
-          damage: this.balance.enemyDamage.SWARMER,
-          speed: this.balance.enemySpeed.SWARMER + Math.random() * 12,
+          damage: Math.round(this.balance.enemyDamage.SWARMER * damageScale),
+          speed: (this.balance.enemySpeed.SWARMER + Math.random() * 12) * speedScale,
           color: '#ef4444', // Red
           scoreValue: 50,
           xpValue: 4,
@@ -800,8 +766,8 @@ export class GameEngine {
           type,
           health: Math.round(65 * hpScale),
           maxHealth: Math.round(65 * hpScale),
-          damage: this.balance.enemyDamage.CHARGER,
-          speed: this.balance.enemySpeed.CHARGER,
+          damage: Math.round(this.balance.enemyDamage.CHARGER * damageScale),
+          speed: this.balance.enemySpeed.CHARGER * speedScale,
           color: '#f97316', // Orange
           scoreValue: 120,
           xpValue: 8,
@@ -823,8 +789,8 @@ export class GameEngine {
           type,
           health: Math.round(50 * hpScale),
           maxHealth: Math.round(50 * hpScale),
-          damage: this.balance.enemyDamage.SHOOTER,
-          speed: this.balance.enemySpeed.SHOOTER,
+          damage: Math.round(this.balance.enemyDamage.SHOOTER * damageScale),
+          speed: this.balance.enemySpeed.SHOOTER * speedScale,
           color: '#a855f7', // Purple
           scoreValue: 150,
           xpValue: 10,
@@ -846,8 +812,8 @@ export class GameEngine {
           type,
           health: Math.round(220 * hpScale),
           maxHealth: Math.round(220 * hpScale),
-          damage: this.balance.enemyDamage.HEAVY,
-          speed: this.balance.enemySpeed.HEAVY,
+          damage: Math.round(this.balance.enemyDamage.HEAVY * damageScale),
+          speed: this.balance.enemySpeed.HEAVY * speedScale,
           color: '#eab308', // Amber
           scoreValue: 300,
           xpValue: 25,
@@ -939,7 +905,8 @@ export class GameEngine {
       };
     }
 
-    boss.health *= this.balance.bossHealthMultiplier; boss.maxHealth = boss.health; boss.damage *= this.balance.bossDamageMultiplier;
+    const scaled = bossStats(this.difficulty, boss.health, boss.damage, this.player.level, this.gameMode);
+    boss.health = scaled.health; boss.maxHealth = scaled.health; boss.damage = scaled.damage;
     this.enemies.push(boss);
     this.triggerScreenShake(8, 0.4);
     sound.playBossAlarm();
@@ -1310,7 +1277,16 @@ export class GameEngine {
     this.player.invulnerableTimer = this.balance.invulnerabilitySeconds;
     this.triggerScreenShake(6, 0.2);
 
-    let remainingDamage = rawAmount;
+    let remainingDamage = rawAmount * (1 - this.player.damageReduction);
+    if (this.currentShip.perk.type === 'DEFENSIVE_SHOCKWAVE') {
+      this.colossusDamageCharge += remainingDamage;
+      const surrounded = this.enemies.filter(enemy => Math.hypot(enemy.x-this.player.x,enemy.y-this.player.y) < 150).length >= 5;
+      if ((this.colossusDamageCharge >= 85 || surrounded) && this.gameTime - this.lastDefensiveShockwave >= 5) {
+        this.colossusDamageCharge = 0; this.lastDefensiveShockwave = this.gameTime;
+        this.particles.addShockwave(this.player.x,this.player.y,this.currentShip.color,150);
+        for (const enemy of this.enemies) if (Math.hypot(enemy.x-this.player.x,enemy.y-this.player.y)<150) this.damageEnemy(enemy,45,true);
+      }
+    }
 
     // Shield takes hit first
     if (this.player.shield > 0) {

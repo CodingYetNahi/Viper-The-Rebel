@@ -6,21 +6,20 @@ export const SHIPS: Record<string, ShipDefinition> = {
     name: 'Viper Mk-IV',
     codename: 'Interceptor',
     tagline: 'Hyper-Agile Hit & Run Skirmisher',
-    description: 'Lightweight aerodynamic chassis with hyper-charged thrusters. Excels at kiting swarms with extreme speed and rapid dashes.',
+    description: 'Lightweight interceptor with precision targeting and responsive thrusters. Excels at kiting swarms without sacrificing control.',
     color: '#06b6d4', // Cyan
     glowColor: 'rgba(6, 182, 212, 0.6)',
     baseHealth: 90,
     baseShield: 50,
     shieldRegen: 4,
     speed: 320,
-    dashCooldown: 1.8,
     critChance: 0.12,
     critMultiplier: 1.8,
     startingWeaponId: 'PULSE_BLASTER',
-    passiveDescription: '+25% Movement Speed and 40% faster Dash Cooldown.',
+    passiveDescription: '+15% movement speed and a stable precision-targeting platform.',
     perk: {
       type: 'SPEED',
-      value: 1.25,
+      value: 1.15,
     }
   },
   TESLA: {
@@ -35,7 +34,6 @@ export const SHIPS: Record<string, ShipDefinition> = {
     baseShield: 90,
     shieldRegen: 8,
     speed: 260,
-    dashCooldown: 2.8,
     critChance: 0.15,
     critMultiplier: 2.0,
     startingWeaponId: 'CHAIN_ARC',
@@ -57,14 +55,13 @@ export const SHIPS: Record<string, ShipDefinition> = {
     baseShield: 120,
     shieldRegen: 5,
     speed: 220,
-    dashCooldown: 3.2,
     critChance: 0.08,
     critMultiplier: 1.6,
     startingWeaponId: 'PLASMA_ORBITER',
-    passiveDescription: '+100% Max Hull HP & emits destructive kinetic shockwaves during Dashing.',
+    passiveDescription: '+60% Max Hull HP and a defensive shockwave after sustained damage.',
     perk: {
-      type: 'SHOCKWAVE',
-      value: 2.0,
+      type: 'DEFENSIVE_SHOCKWAVE',
+      value: 1.6,
     }
   },
   SPECTER: {
@@ -79,7 +76,6 @@ export const SHIPS: Record<string, ShipDefinition> = {
     baseShield: 40,
     shieldRegen: 3,
     speed: 280,
-    dashCooldown: 2.2,
     critChance: 0.35,
     critMultiplier: 3.0,
     startingWeaponId: 'QUANTUM_TORPEDO',

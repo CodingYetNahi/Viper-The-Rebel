@@ -63,21 +63,14 @@ export const BASE_PASSIVES: Record<PassiveType, Omit<PassiveItem, 'level'>> = {
     icon: 'Target',
     color: '#ec4899', // Pink
     statBonusPerLevel: 0.08,
-  },
-  DASH_COOLDOWN: {
-    id: 'DASH_COOLDOWN',
-    name: 'Warp Capacitor',
-    maxLevel: 5,
-    description: 'Reduces Dash Cooldown by 20% and extends invulnerability.',
-    icon: 'ZapFast',
-    color: '#14b8a6', // Teal
-    statBonusPerLevel: 0.20,
   }
 };
 
-export function createPassive(type: PassiveType): PassiveItem {
+export function createPassive(type: PassiveType | string): PassiveItem {
+  // Old saves may still contain the removed dash passive; migrate it to movement speed.
+  const safeType: PassiveType = type === 'DASH_COOLDOWN' || !(type in BASE_PASSIVES) ? 'MOVE_SPEED' : type as PassiveType;
   return {
-    ...BASE_PASSIVES[type],
+    ...BASE_PASSIVES[safeType],
     level: 1,
   };
 }

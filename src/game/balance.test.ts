@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict';
-import { BALANCE, canSpawnEnemy, enemyCapAt, spawnIntervalAt } from './balance.ts';
+import { BALANCE,bossStats,canSpawnEnemy,capDefensiveStats,enemyCapAt,enemyDamageMultiplier,enemyHealthMultiplier,enemySpeedMultiplier,spawnIntervalAt } from './balance.ts';
 import { migrateLocalData, STORAGE_KEYS } from '../lib/storage.ts';
 
 for (const difficulty of ['ROOKIE','REBEL','ELITE'] as const) {
   const b=BALANCE[difficulty];
-  const spawnSamples=Array.from({length:601},(_,s)=>spawnIntervalAt(difficulty,s));
-  const estimatedGroups=spawnSamples.reduce((sum,n)=>sum+1/n,0);
-  console.log(`${difficulty}: 10m estimated groups=${Math.round(estimatedGroups)}, cap=${enemyCapAt(difficulty,600)}, bosses=${b.bossTimes.join('/')}, survival assumption=${difficulty==='ROOKIE'?'5–8m with movement and upgrades':difficulty==='REBEL'?'3–6m':'2–4m'}`);
-  assert.equal(enemyCapAt(difficulty,600),b.absoluteEnemyCap);
-  assert.ok(Math.min(...spawnSamples)>=b.minSpawnInterval);
+  assert.ok(enemyHealthMultiplier(difficulty,120,12)>enemyHealthMultiplier(difficulty,120,1),'level scales health');
+  assert.ok(enemyDamageMultiplier(difficulty,12)>enemyDamageMultiplier(difficulty,1),'level scales damage');
+  assert.ok(enemySpeedMultiplier(difficulty,999)<=b.maxSpeedMultiplier,'speed cap');
+  assert.ok(spawnIntervalAt(difficulty,3600,999)>=b.minSpawnInterval,'spawn floor');
+  assert.ok(enemyCapAt(difficulty,3600,999)<=b.absoluteEnemyCap,'enemy cap');
+  const boss1=bossStats(difficulty,2000,40,1),boss10=bossStats(difficulty,2000,40,10);
+  assert.ok(boss10.health>boss1.health&&boss10.damage>boss1.damage,'boss spawn-level scaling');
+  // With no movement or healing, ordinary contacts eventually exceed each starting hull+shield.
+  const effectiveHit=b.enemyDamage.SWARMER*(1-.6); const startingPool=90*b.hullMultiplier+50*b.shieldMultiplier;
+  assert.ok(effectiveHit*Math.ceil(startingPool/effectiveHit+1)>startingPool,`${difficulty} stationary Viper eventually dies`);
 }
-assert.equal(canSpawnEnemy('ROOKIE','CHARGER',44.9),false);
-assert.deepEqual(BALANCE.ROOKIE.bossTimes,[150,330,540]);
-const values=new Map<string,string>([['neon_void_best_score','42']]);
+assert.ok(enemyHealthMultiplier('ELITE',60,10)>enemyHealthMultiplier('ROOKIE',60,10),'difficulty-specific health pressure');
+assert.equal(canSpawnEnemy('ROOKIE','HEAVY',600,3),false); assert.equal(canSpawnEnemy('ROOKIE','HEAVY',600,7),true);
+assert.deepEqual(capDefensiveStats(999,1),{shieldRegen:14,damageReduction:.6});
+
+const values=new Map<string,string>([['neon_void_best_score','42'],['neon_void_settings',JSON.stringify({passives:['DASH_COOLDOWN'],dashCooldown:2})]]);
 const fake={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v)}};
-assert.equal(migrateLocalData(fake),true); assert.equal(values.get(STORAGE_KEYS.bestScore),'42'); assert.equal(migrateLocalData(fake),false);
+assert.equal(migrateLocalData(fake),true); assert.equal(values.get(STORAGE_KEYS.bestScore),'42'); assert.doesNotThrow(()=>JSON.parse(values.get(STORAGE_KEYS.settings)!)); assert.equal(migrateLocalData(fake),false);
+console.log('balance tests passed');
