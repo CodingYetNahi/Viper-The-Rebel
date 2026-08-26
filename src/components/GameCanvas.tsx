@@ -36,6 +36,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [gameOverData, setGameOverData] = useState<{ won: boolean; finalStats: PlayerStats } | null>(null);
   const [tutorialStep, setTutorialStep] = useState<number | null>(() => localStorage.getItem(STORAGE_KEYS.tutorial)==='1' ? null : 0);
   const [bossWarning, setBossWarning] = useState<string | null>(null);
+  const [hasTouchControls] = useState(() =>
+    window.matchMedia('(any-pointer: coarse)').matches || navigator.maxTouchPoints > 0
+  );
 
   // Virtual Joystick State for touch/mobile
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -150,7 +153,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   useEffect(() => {
-    const hidden = () => { if (document.hidden && engineRef.current?.isRunning) { engineRef.current.pause(); setIsPaused(true); } };
+    const hidden = () => {
+      const engine = engineRef.current;
+      // Level-up and tutorial overlays pause the engine themselves. Only open the
+      // manual pause dialog when lifecycle handling performs the pause transition.
+      if (document.hidden && engine?.isRunning && !engine.isPaused) {
+        engine.pause();
+        setIsPaused(true);
+      }
+    };
     document.addEventListener('visibilitychange', hidden);
     return () => document.removeEventListener('visibilitychange', hidden);
   }, []);
@@ -321,21 +332,25 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
       )}
 
-      <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] z-20 sm:hidden touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} aria-label="Movement joystick">
-        <div className="relative w-28 h-28 rounded-full border-2 border-emerald-300/70 bg-graphite-950/70 bg-slate-900/70 shadow-[0_0_24px_rgba(34,197,94,.22)]"><div className="absolute w-12 h-12 rounded-full bg-emerald-400 border-2 border-emerald-100" style={{left:`${32+(engineRef.current?.joystickVector.x||0)*32}px`,top:`${32+(engineRef.current?.joystickVector.y||0)*32}px`}} /></div>
-      </div>
+      {hasTouchControls && (
+        <>
+          <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] z-20 touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} aria-label="Movement joystick">
+            <div className="relative w-28 h-28 rounded-full border-2 border-emerald-300/70 bg-graphite-950/70 bg-slate-900/70 shadow-[0_0_24px_rgba(34,197,94,.22)]"><div className="absolute w-12 h-12 rounded-full bg-emerald-400 border-2 border-emerald-100" style={{left:`${32+(engineRef.current?.joystickVector.x||0)*32}px`,top:`${32+(engineRef.current?.joystickVector.y||0)*32}px`}} /></div>
+          </div>
 
-      {/* Mobile Touch Controls & Dash Button (Bottom Right) */}
-      <div className="absolute bottom-6 right-6 z-20 flex gap-3 pointer-events-auto sm:hidden">
-        <button
-          id="btn-mobile-dash"
-          onClick={() => engineRef.current?.triggerDash()}
-          className="w-16 h-16 rounded-full bg-cyan-500/80 border-2 border-cyan-300 text-black font-black text-xs flex flex-col items-center justify-center shadow-lg active:scale-95 transition-transform"
-        >
-          <Zap className="w-5 h-5 fill-black" />
-          <span>DASH</span>
-        </button>
-      </div>
+          {/* Touch controls depend on device capability, not viewport width. */}
+          <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] z-20 flex gap-3 pointer-events-auto">
+            <button
+              id="btn-mobile-dash"
+              onClick={() => engineRef.current?.triggerDash()}
+              className="w-16 h-16 rounded-full bg-cyan-500/80 border-2 border-cyan-300 text-black font-black text-xs flex flex-col items-center justify-center shadow-lg active:scale-95 transition-transform"
+            >
+              <Zap className="w-5 h-5 fill-black" />
+              <span>DASH</span>
+            </button>
+          </div>
+        </>
+      )}
 
       {tutorialStep !== null && <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950/80 p-6" role="dialog" aria-modal="true" aria-label="First play tutorial"><div className="max-w-sm rounded-2xl border border-emerald-400 bg-slate-900 p-6 text-center shadow-2xl"><div className="text-xs font-mono text-emerald-300">STEP {tutorialStep+1} OF {tutorial.length}</div><p className="my-5 text-xl font-bold">{tutorial[tutorialStep]}</p><div className="flex gap-3"><button className="min-h-11 flex-1 rounded-lg border border-slate-600" onClick={finishTutorial}>Skip</button><button className="min-h-11 flex-1 rounded-lg bg-emerald-400 font-black text-slate-950" onClick={() => tutorialStep===tutorial.length-1?finishTutorial():setTutorialStep(tutorialStep+1)}>{tutorialStep===tutorial.length-1?'Play':'Next'}</button></div></div></div>}
 
@@ -366,6 +381,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           gameTime={gameTime}
           shipId={shipId}
           gameMode={gameMode}
+          difficulty={settings.difficulty}
           onRestart={handleRestart}
           onExit={onExitToMenu}
         />

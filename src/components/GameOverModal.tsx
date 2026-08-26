@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PlayerStats, GameMode } from '../types';
+import { PlayerStats, GameMode, Difficulty } from '../types';
 import { Trophy, RotateCcw, Home, Skull, Award, Target, Zap, Clock, CloudCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { LeaderboardModal } from './LeaderboardModal.tsx';
@@ -11,6 +11,7 @@ interface GameOverModalProps {
   gameTime: number;
   shipId?: string;
   gameMode?: GameMode;
+  difficulty: Difficulty;
   onRestart: () => void;
   onExit: () => void;
 }
@@ -21,6 +22,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   gameTime,
   shipId = 'VIPER',
   gameMode = 'ENDLESS',
+  difficulty,
   onRestart,
   onExit,
 }) => {
@@ -49,6 +51,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         timeSurvived: gameTime,
         shipId,
         gameMode,
+        difficulty,
       })
         .then(() => {
           setSynced(true);
@@ -60,7 +63,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           setSyncing(false);
         });
     }
-  }, [stats, gameTime, shipId, gameMode, user, synced, syncing, recordRunStats]);
+  }, [stats, gameTime, shipId, gameMode, difficulty, user, synced, syncing, recordRunStats]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

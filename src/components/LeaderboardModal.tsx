@@ -100,6 +100,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
                           </span>
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono mt-0.5">
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-bold text-emerald-300">
+                            {entry.difficulty || 'LEGACY'}
+                          </span>
                           <span className="flex items-center gap-1">
                             <Shield className="w-3 h-3 text-cyan-400" /> Wave {entry.wave}
                           </span>

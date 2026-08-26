@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, googleAuthProvider, testConnection } from '../lib/firebase.ts';
 import { handleFirestoreError, OperationType } from '../lib/firebaseErrors.ts';
+import type { Difficulty } from '../types';
 
 export interface PilotProfile {
   uid: string;
@@ -39,6 +40,7 @@ export interface LeaderboardEntry {
   wave: number;
   kills: number;
   gameMode: string;
+  difficulty?: Difficulty;
   timeSurvived: number;
   createdAt?: unknown;
 }
@@ -57,6 +59,7 @@ interface AuthContextType {
     timeSurvived: number;
     shipId: string;
     gameMode: string;
+    difficulty: Difficulty;
   }) => Promise<void>;
   getTopLeaderboard: () => Promise<LeaderboardEntry[]>;
 }
@@ -151,6 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     timeSurvived: number;
     shipId: string;
     gameMode: string;
+    difficulty: Difficulty;
   }) => {
     if (!user) return;
 
@@ -191,6 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         wave: runData.wave,
         kills: runData.kills,
         gameMode: runData.gameMode.slice(0, 32),
+        difficulty: runData.difficulty,
         timeSurvived: Math.floor(runData.timeSurvived),
         createdAt: serverTimestamp(),
       };
