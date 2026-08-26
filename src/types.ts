@@ -1,5 +1,6 @@
 export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY';
 export type GameMode = 'ENDLESS' | 'BLITZ' | 'BOSS_RUSH';
+export type Difficulty = 'ROOKIE' | 'REBEL' | 'ELITE';
 
 export interface ShipDefinition {
   id: string;
@@ -160,6 +161,7 @@ export interface Enemy {
   rotation?: number;
   hitFlashTimer?: number;
   frozenTimer?: number;
+  spawnProtectionUntil?: number;
 }
 
 export interface Projectile {
@@ -228,6 +230,7 @@ export interface DropItem {
 }
 
 export interface GameSettings {
+  difficulty: Difficulty;
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;

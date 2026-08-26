@@ -47,6 +47,7 @@ interface AuthContextType {
   user: User | null;
   pilotProfile: PilotProfile | null;
   loading: boolean;
+  syncWarning: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   recordRunStats: (runData: {
@@ -66,11 +67,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [pilotProfile, setPilotProfile] = useState<PilotProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
 
   useEffect(() => {
     testConnection();
 
+    let unsubscribeProfile: (() => void) | undefined;
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      unsubscribeProfile?.(); unsubscribeProfile = undefined;
       setUser(currentUser);
       if (!currentUser) {
         setPilotProfile(null);
@@ -87,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!docSnap.exists()) {
           const initialProfile: PilotProfile = {
             uid: currentUser.uid,
-            displayName: (currentUser.displayName || 'Vanguard Pilot').slice(0, 64),
+            displayName: (currentUser.displayName || 'Rookie Rebel').slice(0, 64),
             email: (currentUser.email || '').slice(0, 128),
             photoURL: currentUser.photoURL || undefined,
             highScore: 0,
@@ -105,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Realtime listener for pilot profile
-      const unsubscribeDoc = onSnapshot(
+      unsubscribeProfile = onSnapshot(
         userDocRef,
         (snapshot) => {
           if (snapshot.exists()) {
@@ -115,13 +119,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (error) => {
           handleFirestoreError(error, OperationType.GET, userPath);
+          setSyncWarning('Records unavailable — playing locally.');
+          setLoading(false);
         }
       );
-
-      return () => unsubscribeDoc();
     });
 
-    return () => unsubscribeAuth();
+    return () => { unsubscribeProfile?.(); unsubscribeAuth(); };
   }, []);
 
   const signInWithGoogle = async () => {
@@ -181,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const entry: LeaderboardEntry = {
         userId: user.uid,
-        pilotName: (pilotProfile?.displayName || user.displayName || 'Vanguard Pilot').slice(0, 64),
+        pilotName: (pilotProfile?.displayName || user.displayName || 'Rookie Rebel').slice(0, 64),
         shipId: runData.shipId.slice(0, 32),
         score: runData.score,
         wave: runData.wave,
@@ -221,6 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         pilotProfile,
         loading,
+        syncWarning,
         signInWithGoogle,
         signOut,
         recordRunStats,

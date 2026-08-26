@@ -1,5 +1,7 @@
 {
-  "name": "Neon Void: Cyber Survivor",
-  "description": "Fast-paced arcade survival roguelite action game with fluid arena combat, weapon evolutions, synth audio, and upgrade synergies.",
-  "requestFramePermissions": []
+  "name": "Viper: The Rebel",
+  "shortTitle": "VIPER",
+  "tagline": "Strike Fast. Defy the Swarm.",
+  "description": "An accessible cyber-survival arcade game",
+  "plannedIdentifiers": { "androidPackage": "in.game.vipertherebel", "iosBundleId": "in.game.vipertherebel" }
 }

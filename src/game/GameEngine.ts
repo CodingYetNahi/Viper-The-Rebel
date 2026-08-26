@@ -3,6 +3,7 @@ import {
   Enemy, 
   EnemyType, 
   GameMode, 
+  Difficulty, 
   GameSettings, 
   PassiveItem, 
   PlayerStats, 
@@ -11,6 +12,7 @@ import {
   WeaponItem, 
   WeaponType 
 } from '../types';
+import { BALANCE, canSpawnEnemy, enemyCapAt, spawnIntervalAt } from './balance';
 import { SHIPS } from './ships';
 import { createWeapon, evolveWeapon } from './weapons';
 import { createPassive } from './passives';
@@ -33,6 +35,8 @@ export class GameEngine {
   public isPaused: boolean = false;
   public gameTime: number = 0; // seconds
   public gameMode: GameMode = 'ENDLESS';
+  public difficulty: Difficulty = 'ROOKIE';
+  private balance = BALANCE.ROOKIE;
   public targetDuration: number = 300; // 5 mins for Blitz
 
   // Game entities
@@ -46,6 +50,7 @@ export class GameEngine {
   public particles: ParticleSystem;
 
   public settings: GameSettings = {
+    difficulty: 'ROOKIE',
     masterVolume: 0.8,
     sfxVolume: 0.7,
     musicVolume: 0.4,
@@ -93,6 +98,9 @@ export class GameEngine {
 
     this.currentShip = SHIPS.VIPER;
     this.player = this.createInitialPlayer(this.currentShip);
+    this.player.health *= this.balance.hullMultiplier; this.player.maxHealth = this.player.health;
+    this.player.shield *= this.balance.shieldMultiplier; this.player.maxShield = this.player.shield;
+    this.player.magnetRadius *= this.balance.magnetMultiplier;
 
     this.bindEvents();
   }
@@ -135,18 +143,24 @@ export class GameEngine {
     };
   }
 
-  public initGame(shipId: string = 'VIPER', mode: GameMode = 'ENDLESS') {
+  public initGame(shipId: string = 'VIPER', mode: GameMode = 'ENDLESS', difficulty: Difficulty = this.settings.difficulty) {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
 
     this.currentShip = SHIPS[shipId] || SHIPS.VIPER;
+    this.difficulty = difficulty;
+    this.balance = BALANCE[difficulty];
     this.gameMode = mode;
     this.gameTime = 0;
     this.bossSpawnedFlags = { aegis: false, leviathan: false, archon: false };
 
     this.player = this.createInitialPlayer(this.currentShip);
+    this.player.health *= this.balance.hullMultiplier; this.player.maxHealth = this.player.health;
+    this.player.shield *= this.balance.shieldMultiplier; this.player.maxShield = this.player.shield;
+    this.player.magnetRadius *= this.balance.magnetMultiplier;
+    if (difficulty === 'ROOKIE') this.player.nextLevelXp = 11;
     this.weapons = [createWeapon(this.currentShip.startingWeaponId as WeaponType)];
     this.passives = [];
     this.enemies = [];
@@ -486,7 +500,7 @@ export class GameEngine {
     }
 
     // Shield Regeneration (after 3 seconds without taking damage)
-    if (this.gameTime - this.player.lastShieldHitTime > 3.0 && this.player.shield < this.player.maxShield) {
+    if (this.gameTime - this.player.lastShieldHitTime > this.balance.shieldRegenDelay && this.player.shield < this.player.maxShield) {
       this.player.shield = Math.min(this.player.maxShield, this.player.shield + this.player.shieldRegenRate * dt);
     }
 
@@ -730,37 +744,26 @@ export class GameEngine {
   // --- ENEMY SPAWNING & UPDATE ---
   private updateEnemySpawns(dt: number) {
     this.spawnTimer += dt;
-
-    // Dynamic difficulty scaling based on time and level
     const timeMinutes = this.gameTime / 60;
-    const baseSpawnRate = Math.max(0.18, 0.9 - timeMinutes * 0.12);
-    const maxEnemies = Math.min(180, 25 + Math.floor(timeMinutes * 25));
-
-    // Boss triggers
-    if (this.gameTime >= 120 && !this.bossSpawnedFlags.aegis) {
-      this.bossSpawnedFlags.aegis = true;
-      this.spawnBoss('BOSS_AEGIS');
-    }
-    if (this.gameTime >= 240 && !this.bossSpawnedFlags.leviathan) {
-      this.bossSpawnedFlags.leviathan = true;
-      this.spawnBoss('BOSS_LEVIATHAN');
-    }
-    if (this.gameTime >= 360 && !this.bossSpawnedFlags.archon) {
-      this.bossSpawnedFlags.archon = true;
-      this.spawnBoss('BOSS_ARCHON');
-    }
-
-    if (this.spawnTimer >= baseSpawnRate && this.enemies.length < maxEnemies) {
-      this.spawnTimer = 0;
-      this.spawnEnemyGroup(timeMinutes);
+    const bossTypes: EnemyType[] = ['BOSS_AEGIS','BOSS_LEVIATHAN','BOSS_ARCHON'];
+    const flags = ['aegis','leviathan','archon'] as const;
+    this.balance.bossTimes.forEach((time, index) => {
+      if (this.gameTime >= time && !this.bossSpawnedFlags[flags[index]]) {
+        this.bossSpawnedFlags[flags[index]] = true;
+        this.spawnTimer = 0; // no simultaneous surge
+        this.spawnBoss(bossTypes[index]);
+      }
+    });
+    if (this.spawnTimer >= spawnIntervalAt(this.difficulty,this.gameTime) && this.enemies.length < enemyCapAt(this.difficulty,this.gameTime) && !this.enemies.some(e=>e.isBoss)) {
+      this.spawnTimer = 0; this.spawnEnemyGroup(timeMinutes);
     }
   }
 
   private spawnEnemyGroup(timeMinutes: number) {
     const types: EnemyType[] = ['SWARMER'];
-    if (timeMinutes > 0.5) types.push('CHARGER');
-    if (timeMinutes > 1.2) types.push('SHOOTER');
-    if (timeMinutes > 2.0) types.push('HEAVY');
+    if (canSpawnEnemy(this.difficulty,'CHARGER',this.gameTime)) types.push('CHARGER');
+    if (canSpawnEnemy(this.difficulty,'SHOOTER',this.gameTime) && timeMinutes > 1.2) types.push('SHOOTER');
+    if (canSpawnEnemy(this.difficulty,'HEAVY',this.gameTime) && timeMinutes > 2.0) types.push('HEAVY');
 
     const chosenType = types[Math.floor(Math.random() * types.length)];
     const count = chosenType === 'SWARMER' ? Math.min(6, 2 + Math.floor(timeMinutes)) : 1;
@@ -777,7 +780,7 @@ export class GameEngine {
     const x = Math.max(40, Math.min(this.arenaWidth - 40, this.player.x + Math.cos(angle) * distance));
     const y = Math.max(40, Math.min(this.arenaHeight - 40, this.player.y + Math.sin(angle) * distance));
 
-    const hpScale = 1 + timeMinutes * 0.45;
+    const hpScale = 1 + timeMinutes * this.balance.healthGrowthPerMinute;
     let enemy: Enemy;
 
     switch (type) {
@@ -792,12 +795,13 @@ export class GameEngine {
           type,
           health: Math.round(25 * hpScale),
           maxHealth: Math.round(25 * hpScale),
-          damage: 12,
-          speed: 160 + Math.random() * 30,
+          damage: this.balance.enemyDamage.SWARMER,
+          speed: this.balance.enemySpeed.SWARMER + Math.random() * 12,
           color: '#ef4444', // Red
           scoreValue: 50,
           xpValue: 4,
           isBoss: false,
+          spawnProtectionUntil: this.gameTime + 0.7,
         };
         break;
 
@@ -812,12 +816,13 @@ export class GameEngine {
           type,
           health: Math.round(65 * hpScale),
           maxHealth: Math.round(65 * hpScale),
-          damage: 24,
-          speed: 130,
+          damage: this.balance.enemyDamage.CHARGER,
+          speed: this.balance.enemySpeed.CHARGER,
           color: '#f97316', // Orange
           scoreValue: 120,
           xpValue: 8,
           isBoss: false,
+          spawnProtectionUntil: this.gameTime + 0.7,
           chargeCooldown: 3.0,
           isCharging: false,
         };
@@ -834,12 +839,13 @@ export class GameEngine {
           type,
           health: Math.round(50 * hpScale),
           maxHealth: Math.round(50 * hpScale),
-          damage: 15,
-          speed: 95,
+          damage: this.balance.enemyDamage.SHOOTER,
+          speed: this.balance.enemySpeed.SHOOTER,
           color: '#a855f7', // Purple
           scoreValue: 150,
           xpValue: 10,
           isBoss: false,
+          spawnProtectionUntil: this.gameTime + 0.7,
           shootCooldown: 2.2,
           lastShotTime: this.gameTime + Math.random(),
         };
@@ -856,12 +862,13 @@ export class GameEngine {
           type,
           health: Math.round(220 * hpScale),
           maxHealth: Math.round(220 * hpScale),
-          damage: 35,
-          speed: 70,
+          damage: this.balance.enemyDamage.HEAVY,
+          speed: this.balance.enemySpeed.HEAVY,
           color: '#eab308', // Amber
           scoreValue: 300,
           xpValue: 25,
           isBoss: false,
+          spawnProtectionUntil: this.gameTime + 0.7,
         };
         break;
 
@@ -877,11 +884,11 @@ export class GameEngine {
     const x = this.player.x + Math.cos(angle) * 550;
     const y = this.player.y + Math.sin(angle) * 550;
 
-    let bossName = 'AEGIS DREADNOUGHT';
+    let bossName = 'FANG WARDEN';
     let boss: Enemy;
 
     if (type === 'BOSS_AEGIS') {
-      bossName = 'AEGIS DREADNOUGHT';
+      bossName = 'FANG WARDEN';
       boss = {
         id: this.enemyIdCounter++,
         x,
@@ -903,7 +910,7 @@ export class GameEngine {
         lastShotTime: this.gameTime,
       };
     } else if (type === 'BOSS_LEVIATHAN') {
-      bossName = 'CYBER LEVIATHAN';
+      bossName = 'COILBREAKER';
       boss = {
         id: this.enemyIdCounter++,
         x,
@@ -925,7 +932,7 @@ export class GameEngine {
         lastShotTime: this.gameTime,
       };
     } else {
-      bossName = 'ARCHON PRIME';
+      bossName = 'VENOM CROWN';
       boss = {
         id: this.enemyIdCounter++,
         x,
@@ -948,6 +955,7 @@ export class GameEngine {
       };
     }
 
+    boss.health *= this.balance.bossHealthMultiplier; boss.maxHealth = boss.health; boss.damage *= this.balance.bossDamageMultiplier;
     this.enemies.push(boss);
     this.triggerScreenShake(8, 0.4);
     sound.playBossAlarm();
@@ -1104,7 +1112,7 @@ export class GameEngine {
       e.y += e.vy * dt;
 
       // Check collision with player
-      if (distToPlayer < this.player.radius + e.radius) {
+      if (distToPlayer < this.player.radius + e.radius && this.gameTime >= (e.spawnProtectionUntil || 0)) {
         this.damagePlayer(e.damage);
       }
     }
@@ -1178,7 +1186,7 @@ export class GameEngine {
 
     // 2. Chance for Special Tactical Drops
     const rand = Math.random();
-    if (enemy.isBoss || rand < 0.05) {
+    if (enemy.isBoss || rand < this.balance.healDropChance) {
       let type: DropItem['type'] = 'HEALTH_ORB';
       let color = '#10b981';
       let value = 35;
@@ -1292,7 +1300,7 @@ export class GameEngine {
     if (this.player.invulnerableTimer > 0 || !this.isRunning || this.isPaused) return;
 
     this.player.lastShieldHitTime = this.gameTime;
-    this.player.invulnerableTimer = 0.35; // i-frames
+    this.player.invulnerableTimer = this.balance.invulnerabilitySeconds;
     this.triggerScreenShake(6, 0.2);
 
     let remainingDamage = rawAmount;
@@ -1510,6 +1518,9 @@ export class GameEngine {
     for (const e of this.enemies) {
       ctx.save();
       ctx.translate(e.x, e.y);
+      if (this.gameTime < (e.spawnProtectionUntil || 0)) {
+        ctx.globalAlpha = 0.38; ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,0,e.radius+9,0,Math.PI*2); ctx.stroke();
+      }
 
       // Hit Flash (White)
       if (e.hitFlashTimer && e.hitFlashTimer > 0) {

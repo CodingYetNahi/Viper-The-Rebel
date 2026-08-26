@@ -7,6 +7,7 @@ import { LevelUpModal } from './LevelUpModal';
 import { PauseModal } from './PauseModal';
 import { GameOverModal } from './GameOverModal';
 import { SoundSettings } from './SoundSettings';
+import { STORAGE_KEYS } from '../lib/storage';
 import { Pause, Play, Heart, Shield, Zap, Skull, Trophy, Clock, Target, AlertTriangle } from 'lucide-react';
 
 interface GameCanvasProps {
@@ -33,6 +34,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [levelUpOptions, setLevelUpOptions] = useState<UpgradeOption[] | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [gameOverData, setGameOverData] = useState<{ won: boolean; finalStats: PlayerStats } | null>(null);
+  const [tutorialStep, setTutorialStep] = useState<number | null>(() => localStorage.getItem(STORAGE_KEYS.tutorial)==='1' ? null : 0);
   const [bossWarning, setBossWarning] = useState<string | null>(null);
 
   // Virtual Joystick State for touch/mobile
@@ -79,7 +81,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     engine.settings = { ...settings };
     engineRef.current = engine;
-    engine.initGame(shipId, gameMode);
+    engine.initGame(shipId, gameMode, settings.difficulty);
+    if (tutorialStep !== null) engine.pause();
 
     // Resize Observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -143,8 +146,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     setIsPaused(false);
     setLevelUpOptions(null);
     setGameOverData(null);
-    engineRef.current.initGame(shipId, gameMode);
+    engineRef.current.initGame(shipId, gameMode, settings.difficulty);
   };
+
+  useEffect(() => {
+    const hidden = () => { if (document.hidden && engineRef.current?.isRunning) { engineRef.current.pause(); setIsPaused(true); } };
+    document.addEventListener('visibilitychange', hidden);
+    return () => document.removeEventListener('visibilitychange', hidden);
+  }, []);
+
+  const finishTutorial = () => { localStorage.setItem(STORAGE_KEYS.tutorial,'1'); setTutorialStep(null); engineRef.current?.resume(); };
+  const tutorial = ['Move using the joystick or WASD.','Weapons fire automatically at nearby threats.','Dash to escape danger.','Collect energy to level up.','Choose upgrades and survive.'];
 
   // Touch Joystick Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -191,10 +203,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     <div
       ref={containerRef}
       id="game-canvas-container"
-      className="relative w-full h-screen overflow-hidden bg-slate-950 select-none touch-none"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      className="gameplay-surface relative w-full h-[100dvh] overflow-hidden bg-slate-950 select-none touch-none"
     >
       {/* Primary HTML5 Canvas */}
       <canvas ref={canvasRef} id="main-combat-canvas" className="w-full h-full block cursor-crosshair" />
@@ -312,6 +321,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
       )}
 
+      <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] z-20 sm:hidden touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} aria-label="Movement joystick">
+        <div className="relative w-28 h-28 rounded-full border-2 border-emerald-300/70 bg-graphite-950/70 bg-slate-900/70 shadow-[0_0_24px_rgba(34,197,94,.22)]"><div className="absolute w-12 h-12 rounded-full bg-emerald-400 border-2 border-emerald-100" style={{left:`${32+(engineRef.current?.joystickVector.x||0)*32}px`,top:`${32+(engineRef.current?.joystickVector.y||0)*32}px`}} /></div>
+      </div>
+
       {/* Mobile Touch Controls & Dash Button (Bottom Right) */}
       <div className="absolute bottom-6 right-6 z-20 flex gap-3 pointer-events-auto sm:hidden">
         <button
@@ -323,6 +336,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           <span>DASH</span>
         </button>
       </div>
+
+      {tutorialStep !== null && <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950/80 p-6" role="dialog" aria-modal="true" aria-label="First play tutorial"><div className="max-w-sm rounded-2xl border border-emerald-400 bg-slate-900 p-6 text-center shadow-2xl"><div className="text-xs font-mono text-emerald-300">STEP {tutorialStep+1} OF {tutorial.length}</div><p className="my-5 text-xl font-bold">{tutorial[tutorialStep]}</p><div className="flex gap-3"><button className="min-h-11 flex-1 rounded-lg border border-slate-600" onClick={finishTutorial}>Skip</button><button className="min-h-11 flex-1 rounded-lg bg-emerald-400 font-black text-slate-950" onClick={() => tutorialStep===tutorial.length-1?finishTutorial():setTutorialStep(tutorialStep+1)}>{tutorialStep===tutorial.length-1?'Play':'Next'}</button></div></div></div>}
 
       {/* Modal Dialogs */}
       {levelUpOptions && (
