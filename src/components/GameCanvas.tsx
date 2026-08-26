@@ -7,6 +7,7 @@ import { GameOverModal } from './GameOverModal';
 import { SoundSettings } from './SoundSettings';
 import { STORAGE_KEYS } from '../lib/storage';
 import { Pause, Play, Heart, Shield, Zap, Skull, Trophy, Clock, Target, AlertTriangle } from 'lucide-react';
+import { movementFromDrag, releasedMovement } from '../game/controls';
 
 interface GameCanvasProps {
   shipId: string;
@@ -36,7 +37,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [bossWarning, setBossWarning] = useState<string | null>(null);
 
   // Virtual Joystick State for touch/mobile
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
   const [touchPos, setTouchPos] = useState<{ x: number; y: number } | null>(null);
 
   // Initialize Game Engine
@@ -121,6 +122,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [settings]);
 
+  useEffect(() => { engineRef.current?.clearMovementInput(); touchStartRef.current=null; setTouchPos(null); }, [settings.controlScheme]);
+
   useEffect(() => {
     if (!upgradeQueue.length) return;
     const timer = window.setTimeout(() => setUpgradeQueue(queue => queue.slice(1)), 2500);
@@ -149,46 +152,44 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const finishTutorial = () => { localStorage.setItem(STORAGE_KEYS.tutorial,'1'); setTutorialStep(null); engineRef.current?.resume(); };
   const tutorial = [
-    'Movement practice: use the touch joystick, WASD, or arrow keys.',
+    `Movement practice: use ${settings.controlScheme === 'JOYSTICK' ? 'the fixed lower-left joystick' : 'Touch Steering by dragging on the play area'}; desktop pilots use WASD or arrow keys.`,
     'Targeting demonstration: weapons aim and fire automatically when a safe target is in range.',
     'Collect the glowing energy drop to build XP.',
-    'Use Dash once with the button, Space, or Shift to escape danger.',
     'Boosters are awarded automatically and appear as a queued notification.',
-    'You’re ready — keep moving, rebuild shields, and survive!',
+    'Difficulty rises with time and level. Pause whenever needed; keep moving, rebuild shields, and survive!',
   ];
 
   // Touch Joystick Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    e.preventDefault(); e.stopPropagation();
+    const touch = e.changedTouches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
     setTouchPos({ x: touch.clientX, y: touch.clientY });
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!touchStartRef.current || !engineRef.current) return;
-    const touch = e.touches[0];
+    e.preventDefault(); e.stopPropagation();
+    let touch: React.Touch | null = null;
+    for (let i=0;i<e.touches.length;i++) if (e.touches[i].identifier===touchStartRef.current?.id) touch=e.touches[i];
+    if (!touch) return;
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
-    const maxRadius = 50;
-    const dist = Math.hypot(dx, dy);
-    const clampedDist = Math.min(dist, maxRadius);
-    const angle = Math.atan2(dy, dx);
-
-    const nx = (clampedDist / maxRadius) * Math.cos(angle);
-    const ny = (clampedDist / maxRadius) * Math.sin(angle);
-
-    engineRef.current.joystickVector = { x: nx, y: ny };
+    const vector = movementFromDrag(dx,dy);
+    const clampedDist = Math.min(Math.hypot(dx,dy),50); const angle=Math.atan2(dy,dx);
+    engineRef.current.joystickVector = vector;
     setTouchPos({
       x: touchStartRef.current.x + Math.cos(angle) * clampedDist,
       y: touchStartRef.current.y + Math.sin(angle) * clampedDist,
     });
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e?: React.TouchEvent) => {
+    if (e && touchStartRef.current) { let ended=false; for(let i=0;i<e.changedTouches.length;i++) ended ||= e.changedTouches[i].identifier===touchStartRef.current.id; if(!ended)return; }
     touchStartRef.current = null;
     setTouchPos(null);
     if (engineRef.current) {
-      engineRef.current.joystickVector = { x: 0, y: 0 };
+      engineRef.current.joystickVector = releasedMovement();
     }
   };
 
@@ -205,7 +206,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       className="gameplay-surface relative w-full h-[100dvh] overflow-hidden bg-slate-950 select-none touch-none"
     >
       {/* Primary HTML5 Canvas */}
-      <canvas ref={canvasRef} id="main-combat-canvas" className="w-full h-full block cursor-crosshair" />
+      <canvas ref={canvasRef} id="main-combat-canvas" className="w-full h-full block" onTouchStart={settings.controlScheme==='TOUCH'?handleTouchStart:undefined} onTouchMove={settings.controlScheme==='TOUCH'?handleTouchMove:undefined} onTouchEnd={settings.controlScheme==='TOUCH'?handleTouchEnd:undefined} onTouchCancel={settings.controlScheme==='TOUCH'?handleTouchEnd:undefined} />
 
       {/* Top Combat HUD Overlay */}
       {stats && (
@@ -320,21 +321,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
       )}
 
-      <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] z-20 sm:hidden touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} aria-label="Movement joystick">
+      {settings.controlScheme==='JOYSTICK' && <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] z-20 sm:hidden touch-none" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} aria-label="Movement joystick">
         <div className="relative w-28 h-28 rounded-full border-2 border-emerald-300/70 bg-graphite-950/70 bg-slate-900/70 shadow-[0_0_24px_rgba(34,197,94,.22)]"><div className="absolute w-12 h-12 rounded-full bg-emerald-400 border-2 border-emerald-100" style={{left:`${32+(engineRef.current?.joystickVector.x||0)*32}px`,top:`${32+(engineRef.current?.joystickVector.y||0)*32}px`}} /></div>
-      </div>
-
-      {/* Mobile Touch Controls & Dash Button (Bottom Right) */}
-      <div className="absolute bottom-6 right-6 z-20 flex gap-3 pointer-events-auto sm:hidden">
-        <button
-          id="btn-mobile-dash"
-          onClick={() => engineRef.current?.triggerDash()}
-          className="w-16 h-16 rounded-full bg-cyan-500/80 border-2 border-cyan-300 text-black font-black text-xs flex flex-col items-center justify-center shadow-lg active:scale-95 transition-transform"
-        >
-          <Zap className="w-5 h-5 fill-black" />
-          <span>DASH</span>
-        </button>
-      </div>
+      </div>}
 
       {upgradeQueue[0] && tutorialStep === null && <div className="absolute top-32 right-3 z-30 max-w-[18rem] pointer-events-none rounded-xl border border-emerald-400/70 bg-slate-950/95 px-4 py-3 shadow-xl" role="status" aria-live="polite"><div className="text-[10px] font-black tracking-widest text-emerald-300">UPGRADE ACQUIRED</div><div className="mt-1 flex gap-3"><span className="text-xs font-bold text-emerald-200" aria-label={`${upgradeQueue[0].icon} icon`}>{upgradeQueue[0].icon}</span><div><div className="font-bold text-white">{upgradeQueue[0].title}</div><div className="text-xs text-cyan-200">{upgradeQueue[0].statChange || upgradeQueue[0].description}</div></div></div></div>}
 

@@ -1,6 +1,7 @@
 export type GameState = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY';
 export type GameMode = 'ENDLESS' | 'BLITZ' | 'BOSS_RUSH';
 export type Difficulty = 'ROOKIE' | 'REBEL' | 'ELITE';
+export type ControlScheme = 'JOYSTICK' | 'TOUCH';
 
 export interface ShipDefinition {
   id: string;
@@ -14,13 +15,12 @@ export interface ShipDefinition {
   baseShield: number;
   shieldRegen: number;
   speed: number;
-  dashCooldown: number;
   critChance: number;
   critMultiplier: number;
   startingWeaponId: string;
   passiveDescription: string;
   perk: {
-    type: 'SPEED' | 'SHIELD' | 'CRIT' | 'SHOCKWAVE';
+    type: 'SPEED' | 'SHIELD' | 'CRIT' | 'DEFENSIVE_SHOCKWAVE';
     value: number;
   };
 }
@@ -62,8 +62,7 @@ export type PassiveType =
   | 'ATTACK_SPEED'
   | 'DAMAGE'
   | 'MAGNET_RADIUS'
-  | 'CRIT_RATE'
-  | 'DASH_COOLDOWN';
+  | 'CRIT_RATE';
 
 export interface PassiveItem {
   id: PassiveType;
@@ -104,12 +103,8 @@ export interface PlayerStats {
   shieldRegenRate: number;
   lastShieldHitTime: number;
   speed: number;
-  dashCooldown: number;
-  dashDuration: number;
-  isDashing: boolean;
-  dashTimer: number;
-  lastDashTime: number;
   invulnerableTimer: number;
+  damageReduction: number;
   magnetRadius: number;
   critChance: number;
   critMultiplier: number;
@@ -239,6 +234,7 @@ export interface GameSettings {
   bloomFX: boolean;
   autoAim: boolean;
   particleDensity: 'LOW' | 'MEDIUM' | 'HIGH';
+  controlScheme: ControlScheme;
 }
 
 export interface HighScoreEntry {

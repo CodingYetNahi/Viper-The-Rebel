@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameMode, GameSettings } from '../types';
 import { SHIPS } from '../game/ships';
 import { SoundSettings } from './SoundSettings';
+import { ControlSchemeSelector } from './ControlSchemeSelector';
 import { LeaderboardModal } from './LeaderboardModal.tsx';
 import { Play, Shield, Flame, Crosshair, Award, HelpCircle, Volume2, Sparkles, Trophy, LogIn, LogOut, User as UserIcon, Coins, Loader2 } from 'lucide-react';
 import { sound } from '../audio/soundEngine';
@@ -248,6 +249,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                 {(['ROOKIE','REBEL','ELITE'] as const).map((difficulty) => <button key={difficulty} onClick={() => onUpdateSettings({...settings,difficulty})} className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-black ${settings.difficulty===difficulty?'border-emerald-400 bg-emerald-500/20 text-emerald-200':'border-slate-700 bg-slate-900 text-slate-300'}`} aria-pressed={settings.difficulty===difficulty}>{difficulty}{difficulty==='ROOKIE' && <span className="block text-[9px] text-amber-300">RECOMMENDED</span>}</button>)}
               </div>
             </section>
+            <ControlSchemeSelector settings={settings} onUpdateSettings={onUpdateSettings} />
 
             {/* Mode Selection */}
             <div>
@@ -321,12 +323,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                     <span>Directional Thrusters</span>
                   </li>
                   <li className="flex justify-between border-b border-slate-800 pb-1">
-                    <span className="text-slate-200 font-mono">Space / Shift</span>
-                    <span>Tactical Dash (Invulnerability)</span>
-                  </li>
-                  <li className="flex justify-between border-b border-slate-800 pb-1">
                     <span className="text-slate-200 font-mono">Touchscreen</span>
-                    <span>Joystick + Dash button</span>
+                    <span>Select Joystick or Touch Steering</span>
                   </li>
                   <li className="flex justify-between border-b border-slate-800 pb-1">
                     <span className="text-slate-200 font-mono">Esc / P</span>
@@ -356,11 +354,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
               {[
                 ['1 · KEEP MOVING', 'Move continuously to avoid incoming enemies.'],
                 ['2 · AUTO COMBAT', 'Weapons aim and fire whenever a valid threat is in range.'],
-                ['3 · DASH', 'Escape when surrounded; it briefly protects your ship.'],
-                ['4 · ENERGY', 'Collect glowing drops to gain levels.'],
-                ['5 · AUTO BOOSTERS', 'One valid weighted booster is applied automatically each level.'],
-                ['6 · SHIELDS', 'Avoid damage long enough and your shield regenerates.'],
-                ['7 · SURVIVE', 'Defeat bosses, build combos, and improve your score.'],
+                ['3 · ENERGY', 'Collect glowing drops to gain levels.'],
+                ['4 · AUTO BOOSTERS', 'One valid weighted booster is applied automatically each level without pausing.'],
+                ['5 · SHIELDS', 'Avoid damage long enough and your shield regenerates.'],
+                ['6 · ESCALATION', 'Enemy pressure rises with both elapsed time and player level.'],
+                ['7 · PAUSE', 'Use the visible Pause button, Esc, or P whenever needed.'],
               ].map(([title, text]) => <div key={title} className="rounded-lg border border-slate-700 bg-slate-950/60 p-3"><strong className="text-emerald-300">{title}</strong><p className="mt-1 text-slate-400">{text}</p></div>)}
             </div>
             <div className="grid gap-3 sm:grid-cols-3 text-xs">
@@ -388,6 +386,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
         {activeTab === 'AUDIO' && (
           <div className="max-w-xl mx-auto space-y-4">
             <SoundSettings settings={settings} onUpdateSettings={onUpdateSettings} />
+            <ControlSchemeSelector settings={settings} onUpdateSettings={onUpdateSettings} />
             <div className="text-center pt-2">
               <button
                 onClick={() => setActiveTab('PLAY')}
