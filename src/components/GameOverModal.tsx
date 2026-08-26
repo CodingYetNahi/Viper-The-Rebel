@@ -3,6 +3,7 @@ import { PlayerStats, GameMode } from '../types';
 import { Trophy, RotateCcw, Home, Skull, Award, Target, Zap, Clock, CloudCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { LeaderboardModal } from './LeaderboardModal.tsx';
+import { STORAGE_KEYS } from '../lib/storage';
 
 interface GameOverModalProps {
   stats: PlayerStats;
@@ -31,9 +32,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   // Save High Score to localStorage and Firebase
   useEffect(() => {
     try {
-      const storedBest = parseInt(localStorage.getItem('neon_void_best_score') || '0', 10);
+      const storedBest = parseInt(localStorage.getItem(STORAGE_KEYS.bestScore) || '0', 10);
       if (stats.score > storedBest) {
-        localStorage.setItem('neon_void_best_score', stats.score.toString());
+        localStorage.setItem(STORAGE_KEYS.bestScore, stats.score.toString());
       }
     } catch {
       // ignore
@@ -100,7 +101,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               {user ? (
                 synced ? (
                   <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
-                    <CloudCheck className="w-3.5 h-3.5" /> CLOUD SYNCED
+                    <CloudCheck className="w-3.5 h-3.5" /> RECORDS SYNCED
                   </span>
                 ) : syncing ? (
                   <span className="text-[11px] text-cyan-400 font-mono flex items-center gap-1">

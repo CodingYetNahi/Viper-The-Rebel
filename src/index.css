@@ -1,1 +1,7 @@
 @import "tailwindcss";
+:root { color-scheme: dark; --venom:#39ff88; --graphite:#07110d; }
+body { min-width:320px; background:#07110d; }
+#main-menu-container { overflow-y:auto; min-height:100dvh; background-color:#07110d; background-image:radial-gradient(ellipse at top,rgba(16,185,129,.16),transparent 55%),repeating-radial-gradient(circle at 0 0,transparent 0 18px,rgba(52,211,153,.035) 19px 20px); }
+.gameplay-surface { touch-action:none; overscroll-behavior:none; user-select:none; padding-top:env(safe-area-inset-top); }
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+.viper-emblem{position:relative;width:58px;height:44px;clip-path:polygon(50% 0,100% 24%,78% 100%,55% 48%,45% 48%,22% 100%,0 24%);background:linear-gradient(135deg,#6bff9f,#059669);filter:drop-shadow(0 0 12px rgba(57,255,136,.35))}.viper-emblem:after{content:"";position:absolute;inset:9px 16px 13px;background:#07110d;clip-path:polygon(50% 0,100% 100%,50% 70%,0 100%)}.viper-emblem i{position:absolute;z-index:2;top:17px;width:9px;height:3px;background:#fbbf24}.viper-emblem i:first-child{left:11px;transform:rotate(18deg)}.viper-emblem i:last-child{right:11px;transform:rotate(-18deg)}

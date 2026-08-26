@@ -45,7 +45,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
             </div>
             <div>
               <h2 className="text-xl font-bold tracking-wider text-white uppercase font-mono flex items-center gap-2">
-                Galactic Vanguard Rankings
+                Rebel Rankings
               </h2>
               <p className="text-xs text-slate-400 font-mono">Live telemetry from Firestore</p>
             </div>

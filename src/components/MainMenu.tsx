@@ -6,6 +6,7 @@ import { LeaderboardModal } from './LeaderboardModal.tsx';
 import { Play, Shield, Flame, Crosshair, Award, HelpCircle, Volume2, Sparkles, Trophy, LogIn, LogOut, User as UserIcon, Coins, Loader2 } from 'lucide-react';
 import { sound } from '../audio/soundEngine';
 import { useAuth } from '../context/AuthContext.tsx';
+import { STORAGE_KEYS } from '../lib/storage';
 
 interface MainMenuProps {
   onStartGame: (shipId: string, mode: GameMode) => void;
@@ -14,7 +15,7 @@ interface MainMenuProps {
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpdateSettings }) => {
-  const { user, pilotProfile, loading: authLoading, signInWithGoogle, signOut } = useAuth();
+  const { user, pilotProfile, loading: authLoading, syncWarning, signInWithGoogle, signOut } = useAuth();
   const [selectedShipId, setSelectedShipId] = useState<string>('VIPER');
   const [selectedMode, setSelectedMode] = useState<GameMode>('ENDLESS');
   const [activeTab, setActiveTab] = useState<'PLAY' | 'HOW_TO_PLAY' | 'AUDIO'>('PLAY');
@@ -23,7 +24,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
   const selectedShip = SHIPS[selectedShipId] || SHIPS.VIPER;
 
   // Retrieve Local or Cloud Best High Score
-  const localBestScore = parseInt(localStorage.getItem('neon_void_best_score') || '0', 10);
+  const localBestScore = parseInt(localStorage.getItem(STORAGE_KEYS.bestScore) || '0', 10);
   const displayBestScore = Math.max(localBestScore, pilotProfile?.highScore || 0);
 
   const handleLaunch = () => {
@@ -47,6 +48,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
       />
 
       <div className="relative z-10 w-full max-w-4xl space-y-6">
+        {syncWarning && <div role="status" className="rounded-lg border border-amber-500/50 bg-amber-950/60 p-2 text-center text-xs text-amber-200">{syncWarning}</div>}
         {/* Top Pilot Bar with Firebase Auth & Leaderboard Trigger */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md shadow-lg">
           <div className="flex items-center gap-3">
@@ -67,10 +69,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-xs text-white tracking-wide">
-                      {pilotProfile?.displayName || user.displayName || 'Vanguard Pilot'}
+                      {pilotProfile?.displayName || user.displayName || 'Rookie Rebel'}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
-                      CLOUD SYNCED
+                      RECORDS SYNCED
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
@@ -88,7 +90,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                   <UserIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-300">Guest Pilot</div>
+                  <div className="font-semibold text-slate-300">Rookie Rebel</div>
                   <div className="text-[11px] text-slate-500">Sign in to save records to Firestore</div>
                 </div>
               </div>
@@ -101,7 +103,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
               onClick={() => setShowLeaderboard(true)}
               className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 text-xs font-bold font-mono tracking-wider flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <Trophy className="w-4 h-4 text-amber-400" /> RANKINGS
+              <Trophy className="w-4 h-4 text-amber-400" /> REBEL RANKINGS
             </button>
 
             {authLoading ? (
@@ -131,14 +133,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
 
         {/* Title Header */}
         <div className="text-center space-y-2">
+          <div className="viper-emblem mx-auto" role="img" aria-label="Angular Viper fang emblem"><i /><i /></div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-semibold tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 animate-spin" /> ARCADE SURVIVOR ROGUELITE
+            <Sparkles className="w-3.5 h-3.5 animate-spin" /> AN ACCESSIBLE CYBER-SURVIVAL ARCADE GAME
           </div>
           <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-400 drop-shadow-sm">
-            NEON VOID
+            VIPER: THE REBEL
           </h1>
           <p className="text-sm text-slate-400 font-medium max-w-md mx-auto">
-            Maneuver through robotic swarms, level up adaptive energy weapons, trigger powerful evolutions, and survive the arena.
+            Strike Fast. Defy the Swarm.
           </p>
         </div>
 
@@ -153,7 +156,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
-            <Play className="w-3.5 h-3.5" /> MISSION LAUNCH
+            <Play className="w-3.5 h-3.5" /> START MISSION
           </button>
           <button
             id="tab-how-to-play"
@@ -239,6 +242,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
               </div>
             </div>
 
+            <section aria-labelledby="difficulty-title">
+              <span id="difficulty-title" className="text-xs font-bold text-slate-300 tracking-wider block mb-2">CHOOSE DIFFICULTY</span>
+              <div className="grid grid-cols-3 gap-2">
+                {(['ROOKIE','REBEL','ELITE'] as const).map((difficulty) => <button key={difficulty} onClick={() => onUpdateSettings({...settings,difficulty})} className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-black ${settings.difficulty===difficulty?'border-emerald-400 bg-emerald-500/20 text-emerald-200':'border-slate-700 bg-slate-900 text-slate-300'}`} aria-pressed={settings.difficulty===difficulty}>{difficulty}{difficulty==='ROOKIE' && <span className="block text-[9px] text-amber-300">RECOMMENDED</span>}</button>)}
+              </div>
+            </section>
+
             {/* Mode Selection */}
             <div>
               <span className="text-xs font-bold text-slate-400 tracking-wider block mb-2 px-1">SELECT MISSION PROTOCOL</span>
@@ -252,7 +262,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                       : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
-                  <div className="font-bold text-xs text-cyan-300 mb-1">ENDLESS SURVIVAL</div>
+                  <div className="font-bold text-xs text-cyan-300 mb-1">ENDLESS REBELLION</div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">Continuous scaling enemy onslaught. Maximize high score.</p>
                 </button>
 
@@ -265,7 +275,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                       : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
-                  <div className="font-bold text-xs text-amber-300 mb-1">5-MINUTE BLITZ</div>
+                  <div className="font-bold text-xs text-amber-300 mb-1">REBEL RUN</div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">High-density spawn rate. Survive 300 seconds for tactical victory.</p>
                 </button>
 
@@ -278,7 +288,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                       : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
-                  <div className="font-bold text-xs text-purple-300 mb-1">BOSS RUSH</div>
+                  <div className="font-bold text-xs text-purple-300 mb-1">VIPER SIEGE</div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">Start at Level 5 with heavy dreadnoughts and leviathan titans.</p>
                 </button>
               </div>
@@ -291,7 +301,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                 onClick={handleLaunch}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-400 hover:from-cyan-400 hover:to-sky-300 text-slate-950 font-black text-base tracking-wider uppercase flex items-center justify-center gap-3 cursor-pointer shadow-xl shadow-cyan-500/25 transition-all transform active:scale-[0.99]"
               >
-                <Play className="w-5 h-5 fill-slate-950" /> ENGAGE ARENA ({selectedShip.name})
+                <Play className="w-5 h-5 fill-slate-950" /> START MISSION ({selectedShip.name})
               </button>
             </div>
           </div>
@@ -342,6 +352,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
             </div>
 
             <div className="pt-2 border-t border-slate-800 text-center">
+              <button onClick={() => { localStorage.removeItem('viper_tutorial_complete'); handleLaunch(); }} className="mr-2 min-h-11 px-6 py-2.5 rounded-lg border border-emerald-400 text-emerald-300 font-bold text-xs">REPLAY TUTORIAL</button>
               <button
                 onClick={() => setActiveTab('PLAY')}
                 className="px-6 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs cursor-pointer transition-colors"
