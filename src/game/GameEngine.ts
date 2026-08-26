@@ -10,7 +10,7 @@ import {
   Projectile, 
   ShipDefinition, 
   WeaponItem, 
-  WeaponType 
+  WeaponType, UpgradeOption
 } from '../types';
 import { BALANCE, canSpawnEnemy, enemyCapAt, spawnIntervalAt } from './balance';
 import { SHIPS } from './ships';
@@ -18,9 +18,11 @@ import { createWeapon, evolveWeapon } from './weapons';
 import { createPassive } from './passives';
 import { ParticleSystem } from './particles';
 import { sound } from '../audio/soundEngine';
+import { selectAutomaticUpgrade } from './upgrades';
+import { predictiveIntercept, turnVelocityToward, validTarget } from './targeting';
 
 export interface GameEngineCallbacks {
-  onLevelUp: (level: number) => void;
+  onLevelUp: (level: number, upgrade: UpgradeOption) => void;
   onGameOver: (stats: PlayerStats, won: boolean) => void;
   onBossSpawn: (bossName: string) => void;
   onStatsUpdate: (stats: PlayerStats) => void;
@@ -83,6 +85,9 @@ export class GameEngine {
 
   private animationFrameId: number | null = null;
   private lastTimestamp: number = 0;
+  private upgradeHistory: string[] = [];
+  private lockedTargetId: number | null = null;
+  private targetLockUntil = 0;
 
   private boundKeyDown: (e: KeyboardEvent) => void = () => {};
   private boundKeyUp: (e: KeyboardEvent) => void = () => {};
@@ -166,6 +171,8 @@ export class GameEngine {
     this.enemies = [];
     this.projectiles = [];
     this.dropItems = [];
+    this.upgradeHistory = [];
+    this.lockedTargetId = null;
     this.particles.clear();
 
     if (mode === 'BLITZ') {
@@ -179,6 +186,7 @@ export class GameEngine {
     this.recalculatePlayerStats();
     this.isRunning = true;
     this.isPaused = false;
+    this.settings.autoAim = true;
     this.lastTimestamp = performance.now();
 
     sound.setVolumes(this.settings.masterVolume, this.settings.sfxVolume, this.settings.musicVolume);
@@ -282,15 +290,7 @@ export class GameEngine {
       this.keys[e.code] = false;
     };
 
-    this.boundMouseMove = (e: MouseEvent) => {
-      const rect = this.canvas.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        this.mousePos.x = (e.clientX - rect.left) * scaleX + this.camera.x;
-        this.mousePos.y = (e.clientY - rect.top) * scaleY + this.camera.y;
-      }
-    };
+    this.boundMouseMove = () => {};
 
     this.boundMouseDown = () => {
       this.isMouseDown = true;
@@ -302,9 +302,6 @@ export class GameEngine {
 
     window.addEventListener('keydown', this.boundKeyDown);
     window.addEventListener('keyup', this.boundKeyUp);
-    this.canvas.addEventListener('mousemove', this.boundMouseMove);
-    this.canvas.addEventListener('mousedown', this.boundMouseDown);
-    window.addEventListener('mouseup', this.boundMouseUp);
   }
 
   public triggerDash() {
@@ -371,9 +368,6 @@ export class GameEngine {
     }
     window.removeEventListener('keydown', this.boundKeyDown);
     window.removeEventListener('keyup', this.boundKeyUp);
-    this.canvas.removeEventListener('mousemove', this.boundMouseMove);
-    this.canvas.removeEventListener('mousedown', this.boundMouseDown);
-    window.removeEventListener('mouseup', this.boundMouseUp);
     sound.stopMusic();
   }
 
@@ -473,25 +467,13 @@ export class GameEngine {
     this.player.y = Math.max(this.player.radius + 10, Math.min(this.arenaHeight - this.player.radius - 10, this.player.y));
 
     // Player aim angle
-    if (this.settings.autoAim && this.enemies.length > 0) {
-      // Find nearest enemy within 500px
-      let nearestDist = 550;
-      let targetEnemy: Enemy | null = null;
-      for (const e of this.enemies) {
-        const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
-        if (d < nearestDist) {
-          nearestDist = d;
-          targetEnemy = e;
-        }
-      }
+    {
+      let targetEnemy = this.getCombatTarget(550);
       if (targetEnemy) {
         this.player.angle = Math.atan2(targetEnemy.y - this.player.y, targetEnemy.x - this.player.x);
       } else if (len > 0.1) {
         this.player.angle = Math.atan2(my, mx);
       }
-    } else {
-      // Aim towards mouse
-      this.player.angle = Math.atan2(this.mousePos.y - this.player.y, this.mousePos.x - this.player.x);
     }
 
     // Invulnerability timer
@@ -521,17 +503,22 @@ export class GameEngine {
   }
 
   private fireWeapon(weapon: WeaponItem) {
+    const target = this.getCombatTarget(weapon.range);
+    const permitsNoTarget = weapon.id === 'CRYO_NOVA' || weapon.id === 'PLASMA_ORBITER';
+    if (!target && !permitsNoTarget) return;
     const damage = Math.round(weapon.damage * this.player.damageMultiplier);
     const isCrit = Math.random() < this.player.critChance;
     const finalDamage = isCrit ? Math.round(damage * this.player.critMultiplier) : damage;
 
     switch (weapon.id) {
       case 'PULSE_BLASTER': {
+        const aim = predictiveIntercept(this.player, target!, target!, weapon.speed);
+        const baseAngle = Math.atan2(aim.y - this.player.y, aim.x - this.player.x);
         const count = weapon.projectileCount;
         const spread = count > 1 ? 0.18 : 0;
         for (let i = 0; i < count; i++) {
           const offset = (i - (count - 1) / 2) * spread;
-          const a = this.player.angle + offset;
+          const a = baseAngle + offset;
           this.projectiles.push({
             id: this.projectileIdCounter++,
             x: this.player.x + Math.cos(a) * 20,
@@ -565,7 +552,6 @@ export class GameEngine {
 
       case 'QUANTUM_TORPEDO': {
         // Target strongest or furthest enemy
-        const target = this.getStrongestEnemy();
         for (let i = 0; i < weapon.projectileCount; i++) {
           const a = this.player.angle + (Math.random() - 0.5) * 0.8;
           this.projectiles.push({
@@ -583,7 +569,7 @@ export class GameEngine {
             pierce: 1,
             lifetime: 0,
             maxLifetime: 3.5,
-            homingTargetId: target ? target.id : undefined,
+            homingTargetId: target!.id,
             isExplosive: true,
             explosionRadius: weapon.area,
           });
@@ -668,17 +654,15 @@ export class GameEngine {
       p.lifetime += dt;
 
       // Homing missile logic
-      if (p.homingTargetId) {
-        const target = this.enemies.find(e => e.id === p.homingTargetId);
+      if (p.homingTargetId && p.lifetime < 3.25) {
+        let target = this.enemies.find(e => e.id === p.homingTargetId && validTarget(e, this.gameTime));
+        if (!target) {
+          target = this.getClosestEnemy(p.x, p.y, 450) || undefined;
+          p.homingTargetId = target?.id;
+        }
         if (target) {
-          const angleToTarget = Math.atan2(target.y - p.y, target.x - p.x);
-          const currentAngle = Math.atan2(p.vy, p.vx);
-          const diff = Math.atan2(Math.sin(angleToTarget - currentAngle), Math.cos(angleToTarget - currentAngle));
-          const turnRate = 5.0 * dt;
-          const newAngle = currentAngle + Math.sign(diff) * Math.min(Math.abs(diff), turnRate);
-          const speed = Math.hypot(p.vx, p.vy);
-          p.vx = Math.cos(newAngle) * speed;
-          p.vy = Math.sin(newAngle) * speed;
+          const velocity = turnVelocityToward(p, p, target, 3.2 * dt);
+          p.vx = velocity.x; p.vy = velocity.y;
 
           // Smoke trail
           this.particles.addSparks(p.x, p.y, p.color, 1, 40);
@@ -1291,9 +1275,32 @@ export class GameEngine {
 
       sound.playLevelUp();
       this.particles.addShockwave(this.player.x, this.player.y, '#38bdf8', 180);
-      this.isPaused = true;
-      this.callbacks.onLevelUp(this.player.level);
+      const upgrade = selectAutomaticUpgrade({
+        activeWeapons: this.weapons, activePassives: this.passives,
+        health: this.player.health, maxHealth: this.player.maxHealth,
+        level: this.player.level, history: this.upgradeHistory, maxSlots: 3,
+      });
+      if (upgrade) {
+        this.applyUpgrade(upgrade.id, upgrade.targetId);
+        this.upgradeHistory.push(upgrade.targetId);
+        this.callbacks.onLevelUp(this.player.level, upgrade);
+      }
     }
+  }
+
+  private getCombatTarget(range: number): Enemy | null {
+    const locked = this.enemies.find(e => e.id === this.lockedTargetId && validTarget(e, this.gameTime));
+    const lockedDistance = locked ? Math.hypot(locked.x - this.player.x, locked.y - this.player.y) : Infinity;
+    const candidates = this.enemies.filter(e => validTarget(e, this.gameTime) && Math.hypot(e.x - this.player.x, e.y - this.player.y) <= range);
+    if (!candidates.length) { this.lockedTargetId = null; return null; }
+    candidates.sort((a, b) => {
+      const threat = (e: Enemy) => Math.hypot(e.x - this.player.x, e.y - this.player.y) - (e.isBoss ? 140 : 0) - e.damage * 2;
+      return threat(a) - threat(b);
+    });
+    const best = candidates[0];
+    if (locked && lockedDistance <= range && (this.gameTime < this.targetLockUntil || lockedDistance <= Math.hypot(best.x-this.player.x,best.y-this.player.y) * 1.35)) return locked;
+    this.lockedTargetId = best.id; this.targetLockUntil = this.gameTime + 0.45;
+    return best;
   }
 
   public damagePlayer(rawAmount: number) {

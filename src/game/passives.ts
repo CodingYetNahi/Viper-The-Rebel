@@ -1,4 +1,4 @@
-import { PassiveItem, PassiveType } from '../types';
+import type { PassiveItem, PassiveType } from '../types.ts';
 
 export const BASE_PASSIVES: Record<PassiveType, Omit<PassiveItem, 'level'>> = {
   MAX_HEALTH: {

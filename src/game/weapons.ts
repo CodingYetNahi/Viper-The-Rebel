@@ -1,4 +1,4 @@
-import { WeaponItem, WeaponType } from '../types';
+import type { WeaponItem, WeaponType } from '../types.ts';
 
 export const BASE_WEAPONS: Record<WeaponType, Omit<WeaponItem, 'level' | 'isEvolved' | 'lastFired'>> = {
   PULSE_BLASTER: {
