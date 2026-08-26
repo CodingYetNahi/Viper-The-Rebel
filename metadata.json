@@ -1,6 +1,5 @@
 {
   "name": "Neon Void: Cyber Survivor",
   "description": "Fast-paced arcade survival roguelite action game with fluid arena combat, weapon evolutions, synth audio, and upgrade synergies.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }
