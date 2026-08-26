@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { GameMode, GameSettings, PlayerStats, UpgradeOption } from '../types';
-import { generateUpgradeOptions } from '../game/upgrades';
 import { WeaponHUD } from './WeaponHUD';
-import { LevelUpModal } from './LevelUpModal';
 import { PauseModal } from './PauseModal';
 import { GameOverModal } from './GameOverModal';
 import { SoundSettings } from './SoundSettings';
@@ -31,7 +29,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [gameTime, setGameTime] = useState<number>(0);
-  const [levelUpOptions, setLevelUpOptions] = useState<UpgradeOption[] | null>(null);
+  const [upgradeQueue, setUpgradeQueue] = useState<UpgradeOption[]>([]);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [gameOverData, setGameOverData] = useState<{ won: boolean; finalStats: PlayerStats } | null>(null);
   const [tutorialStep, setTutorialStep] = useState<number | null>(() => localStorage.getItem(STORAGE_KEYS.tutorial)==='1' ? null : 0);
@@ -55,14 +53,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     canvas.height = height;
 
     const engine = new GameEngine(canvas, {
-      onLevelUp: (level) => {
-        if (!engineRef.current) return;
-        const options = generateUpgradeOptions(
-          engineRef.current.weapons,
-          engineRef.current.passives,
-          3
-        );
-        setLevelUpOptions(options);
+      onLevelUp: (_level, upgrade) => {
+        setUpgradeQueue(queue => [...queue, upgrade]);
       },
       onGameOver: (finalStats, won) => {
         setGameOverData({ won, finalStats });
@@ -79,7 +71,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       },
     });
 
-    engine.settings = { ...settings };
+    engine.settings = { ...settings, autoAim: true };
     engineRef.current = engine;
     engine.initGame(shipId, gameMode, settings.difficulty);
     if (tutorialStep !== null) engine.pause();
@@ -100,7 +92,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Global Key Listener for Pause
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
-        if (engineRef.current && !levelUpOptions && !gameOverData) {
+        if (engineRef.current && !gameOverData) {
           if (engineRef.current.isPaused) {
             engineRef.current.resume();
             setIsPaused(false);
@@ -125,15 +117,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Sync settings updates to active engine
   useEffect(() => {
     if (engineRef.current) {
-      engineRef.current.settings = { ...settings };
+      engineRef.current.settings = { ...settings, autoAim: true };
     }
   }, [settings]);
 
-  const handleSelectUpgrade = (option: UpgradeOption) => {
-    if (!engineRef.current) return;
-    engineRef.current.applyUpgrade(option.id, option.targetId);
-    setLevelUpOptions(null);
-  };
+  useEffect(() => {
+    if (!upgradeQueue.length) return;
+    const timer = window.setTimeout(() => setUpgradeQueue(queue => queue.slice(1)), 2500);
+    return () => window.clearTimeout(timer);
+  }, [upgradeQueue]);
 
   const handlePauseResume = () => {
     if (!engineRef.current) return;
@@ -144,7 +136,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const handleRestart = () => {
     if (!engineRef.current) return;
     setIsPaused(false);
-    setLevelUpOptions(null);
+    setUpgradeQueue([]);
     setGameOverData(null);
     engineRef.current.initGame(shipId, gameMode, settings.difficulty);
   };
@@ -156,7 +148,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   }, []);
 
   const finishTutorial = () => { localStorage.setItem(STORAGE_KEYS.tutorial,'1'); setTutorialStep(null); engineRef.current?.resume(); };
-  const tutorial = ['Move using the joystick or WASD.','Weapons fire automatically at nearby threats.','Dash to escape danger.','Collect energy to level up.','Choose upgrades and survive.'];
+  const tutorial = [
+    'Movement practice: use the touch joystick, WASD, or arrow keys.',
+    'Targeting demonstration: weapons aim and fire automatically when a safe target is in range.',
+    'Collect the glowing energy drop to build XP.',
+    'Use Dash once with the button, Space, or Shift to escape danger.',
+    'Boosters are awarded automatically and appear as a queued notification.',
+    'You’re ready — keep moving, rebuild shields, and survive!',
+  ];
 
   // Touch Joystick Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -337,17 +336,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </button>
       </div>
 
-      {tutorialStep !== null && <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950/80 p-6" role="dialog" aria-modal="true" aria-label="First play tutorial"><div className="max-w-sm rounded-2xl border border-emerald-400 bg-slate-900 p-6 text-center shadow-2xl"><div className="text-xs font-mono text-emerald-300">STEP {tutorialStep+1} OF {tutorial.length}</div><p className="my-5 text-xl font-bold">{tutorial[tutorialStep]}</p><div className="flex gap-3"><button className="min-h-11 flex-1 rounded-lg border border-slate-600" onClick={finishTutorial}>Skip</button><button className="min-h-11 flex-1 rounded-lg bg-emerald-400 font-black text-slate-950" onClick={() => tutorialStep===tutorial.length-1?finishTutorial():setTutorialStep(tutorialStep+1)}>{tutorialStep===tutorial.length-1?'Play':'Next'}</button></div></div></div>}
+      {upgradeQueue[0] && tutorialStep === null && <div className="absolute top-32 right-3 z-30 max-w-[18rem] pointer-events-none rounded-xl border border-emerald-400/70 bg-slate-950/95 px-4 py-3 shadow-xl" role="status" aria-live="polite"><div className="text-[10px] font-black tracking-widest text-emerald-300">UPGRADE ACQUIRED</div><div className="mt-1 flex gap-3"><span className="text-xs font-bold text-emerald-200" aria-label={`${upgradeQueue[0].icon} icon`}>{upgradeQueue[0].icon}</span><div><div className="font-bold text-white">{upgradeQueue[0].title}</div><div className="text-xs text-cyan-200">{upgradeQueue[0].statChange || upgradeQueue[0].description}</div></div></div></div>}
+
+      {tutorialStep !== null && <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950/80 p-6" role="dialog" aria-modal="true" aria-label="First play guided practice"><div className="max-w-sm rounded-2xl border border-emerald-400 bg-slate-900 p-6 text-center shadow-2xl"><div className="text-xs font-mono text-emerald-300">GUIDED PRACTICE {tutorialStep+1} / {tutorial.length}</div><p className="my-5 text-xl font-bold">{tutorial[tutorialStep]}</p><p className="mb-4 text-xs text-slate-400">Combat and the normal spawn schedule stay paused while you learn.</p><div className="flex gap-3"><button className="min-h-11 flex-1 rounded-lg border border-slate-600" onClick={finishTutorial}>Skip</button><button className="min-h-11 flex-1 rounded-lg bg-emerald-400 font-black text-slate-950" onClick={() => tutorialStep===tutorial.length-1?finishTutorial():setTutorialStep(step => (step ?? 0)+1)}>{tutorialStep===tutorial.length-1?'Start mission':'Next'}</button></div></div></div>}
 
       {/* Modal Dialogs */}
-      {levelUpOptions && (
-        <LevelUpModal
-          level={stats?.level || 2}
-          options={levelUpOptions}
-          onSelectOption={handleSelectUpgrade}
-        />
-      )}
-
       {isPaused && stats && (
         <PauseModal
           stats={stats}

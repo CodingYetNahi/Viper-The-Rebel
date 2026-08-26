@@ -325,14 +325,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                     <span>Tactical Dash (Invulnerability)</span>
                   </li>
                   <li className="flex justify-between border-b border-slate-800 pb-1">
-                    <span className="text-slate-200 font-mono">Mouse / Auto-Aim</span>
-                    <span>Targeting System</span>
+                    <span className="text-slate-200 font-mono">Touchscreen</span>
+                    <span>Joystick + Dash button</span>
                   </li>
                   <li className="flex justify-between border-b border-slate-800 pb-1">
                     <span className="text-slate-200 font-mono">Esc / P</span>
                     <span>Tactical Pause & Audio</span>
                   </li>
                 </ul>
+                <p className="text-xs text-slate-400"><strong className="text-white">Mouse:</strong> use menu and pause controls only; aiming and firing are always automatic.</p>
               </div>
 
               <div className="space-y-3">
@@ -349,6 +350,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, settings, onUpd
                   <div>• <strong className="text-red-300">Antimatter Missiles</strong>: Massive cluster splash explosions</div>
                 </div>
               </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 text-xs">
+              {[
+                ['1 · KEEP MOVING', 'Move continuously to avoid incoming enemies.'],
+                ['2 · AUTO COMBAT', 'Weapons aim and fire whenever a valid threat is in range.'],
+                ['3 · DASH', 'Escape when surrounded; it briefly protects your ship.'],
+                ['4 · ENERGY', 'Collect glowing drops to gain levels.'],
+                ['5 · AUTO BOOSTERS', 'One valid weighted booster is applied automatically each level.'],
+                ['6 · SHIELDS', 'Avoid damage long enough and your shield regenerates.'],
+                ['7 · SURVIVE', 'Defeat bosses, build combos, and improve your score.'],
+              ].map(([title, text]) => <div key={title} className="rounded-lg border border-slate-700 bg-slate-950/60 p-3"><strong className="text-emerald-300">{title}</strong><p className="mt-1 text-slate-400">{text}</p></div>)}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3 text-xs">
+              <div><strong className="text-emerald-300">ROOKIE</strong><p className="text-slate-400">Forgiving damage, shields, and progression.</p></div>
+              <div><strong className="text-cyan-300">REBEL</strong><p className="text-slate-400">The intended balanced challenge.</p></div>
+              <div><strong className="text-red-300">ELITE</strong><p className="text-slate-400">Faster, tougher pressure for veterans.</p></div>
+              <div><strong>ENDLESS REBELLION</strong><p className="text-slate-400">Scaling survival and high scores.</p></div>
+              <div><strong>REBEL RUN</strong><p className="text-slate-400">Dense five-minute survival.</p></div>
+              <div><strong>VIPER SIEGE</strong><p className="text-slate-400">Boss-focused, high-level combat.</p></div>
             </div>
 
             <div className="pt-2 border-t border-slate-800 text-center">
