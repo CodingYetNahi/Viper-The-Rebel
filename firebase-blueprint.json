@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered pilot profile tracking persistent high scores and unlocked ships",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth user ID",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Pilot callsign",
+          "maxLength": 64
+        },
+        "email": {
+          "type": "string",
+          "description": "Pilot contact email",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar image URL",
+          "maxLength": 512
+        },
+        "highScore": {
+          "type": "number",
+          "description": "Highest score achieved across all runs"
+        },
+        "highestWave": {
+          "type": "number",
+          "description": "Highest wave reached"
+        },
+        "totalKills": {
+          "type": "number",
+          "description": "Lifetime enemies destroyed"
+        },
+        "gamesPlayed": {
+          "type": "number",
+          "description": "Total completed runs"
+        },
+        "credits": {
+          "type": "number",
+          "description": "Collected stellar credits for ship upgrades"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Profile creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last profile update timestamp"
+        }
+      },
+      "required": ["uid", "displayName", "highScore", "highestWave", "totalKills", "gamesPlayed", "credits", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Recorded run statistics for global and personal pilot leaderboards",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the pilot",
+          "maxLength": 128
+        },
+        "pilotName": {
+          "type": "string",
+          "description": "Callsign of the pilot",
+          "maxLength": 64
+        },
+        "shipId": {
+          "type": "string",
+          "description": "Ship chassis ID used in the run",
+          "maxLength": 32
+        },
+        "score": {
+          "type": "number",
+          "description": "Score achieved in this mission"
+        },
+        "wave": {
+          "type": "number",
+          "description": "Wave cleared"
+        },
+        "kills": {
+          "type": "number",
+          "description": "Enemies destroyed in this run"
+        },
+        "gameMode": {
+          "type": "string",
+          "description": "Game mode played (e.g. ENDLESS, BOSS_RUSH, SURVIVOR)",
+          "maxLength": 32
+        },
+        "timeSurvived": {
+          "type": "number",
+          "description": "Survival duration in seconds"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Run record submission timestamp"
+        }
+      },
+      "required": ["userId", "pilotName", "shipId", "score", "wave", "kills", "gameMode", "timeSurvived", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private and public pilot profile metadata"
+    },
+    "/leaderboard/{scoreId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global leaderboard mission records"
+    }
+  }
+}
