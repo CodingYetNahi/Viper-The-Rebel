@@ -3,7 +3,9 @@ import { createSeededRandom, repetitionMultiplier, selectAutomaticUpgrade } from
 import { predictiveIntercept, turnVelocityToward } from './targeting.ts';
 import { createWeapon } from './weapons.ts';
 import { createPassive } from './passives.ts';
-import { movementFromDrag, releasedMovement } from './controls.ts';
+import { controlIntent, movementFromDrag, normalizeMovement, releasedMovement } from './controls.ts';
+import { calculateCanvasSize } from './canvasSizing.ts';
+import { frameDeltaSeconds, MAX_FRAME_DELTA_SECONDS } from './timing.ts';
 import { readFileSync } from 'node:fs';
 
 assert.equal(repetitionMultiplier('DAMAGE', ['DAMAGE']), 0.15);
@@ -51,6 +53,13 @@ assert.ok(Math.abs(Math.hypot(turned.x, turned.y) - 100) < 1e-9, 'homing preserv
 assert.deepEqual(releasedMovement(),{x:0,y:0},'joystick/touch release resets movement');
 assert.deepEqual(movementFromDrag(2,2),{x:0,y:0},'touch steering dead zone');
 assert.ok(movementFromDrag(50,0).x>.9,'drag direction steers rather than teleports');
+assert.deepEqual(normalizeMovement(3, 4), {x: .6, y: .8}, 'input vectors are normalized');
+const keyboardIntent = controlIntent({KeyW:true,KeyD:true}, releasedMovement());
+assert.ok(Math.abs(keyboardIntent.moveX - Math.SQRT1_2) < 1e-12 && Math.abs(keyboardIntent.moveY + Math.SQRT1_2) < 1e-12, 'keyboard maps to normalized intent');
+assert.deepEqual(controlIntent({KeyW:true}, {x:.5,y:0}), {moveX:.5,moveY:0,pause:false}, 'active touch intent takes precedence without losing analog strength');
+assert.deepEqual(calculateCanvasSize(320.4, 480.4, 3), {cssWidth:320,cssHeight:480,pixelWidth:640,pixelHeight:960,dpr:2}, 'canvas backing store uses capped DPR');
+assert.equal(frameDeltaSeconds(10_000, 1_000), MAX_FRAME_DELTA_SECONDS, 'large restored-tab delta is capped');
+assert.equal(frameDeltaSeconds(1_000, 1_000), 0, 'duplicate timestamps do not advance simulation');
 assert.equal(createPassive('DASH_COOLDOWN').id,'MOVE_SPEED','legacy dash passive migrates safely');
 const canvasSource=readFileSync(new URL('../components/GameCanvas.tsx',import.meta.url),'utf8');
 assert.ok(!canvasSource.includes('LevelUp'+'Modal'),'no blocking level-up component references');

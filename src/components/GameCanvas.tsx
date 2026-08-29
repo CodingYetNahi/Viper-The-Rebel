@@ -8,6 +8,7 @@ import { SoundSettings } from './SoundSettings';
 import { STORAGE_KEYS } from '../lib/storage';
 import { Pause, Play, Heart, Shield, Zap, Skull, Trophy, Clock, Target, AlertTriangle } from 'lucide-react';
 import { movementFromDrag, releasedMovement } from '../game/controls';
+import { applyCanvasSize, calculateCanvasSize } from '../game/canvasSizing';
 
 interface GameCanvasProps {
   shipId: string;
@@ -50,8 +51,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Set canvas dimensions to parent container
     const width = container.clientWidth || window.innerWidth || 800;
     const height = container.clientHeight || window.innerHeight || 600;
-    canvas.width = width;
-    canvas.height = height;
+    const initialSize = calculateCanvasSize(width, height, window.devicePixelRatio);
+    applyCanvasSize(canvas, initialSize);
 
     const engine = new GameEngine(canvas, {
       onLevelUp: (_level, upgrade) => {
@@ -73,6 +74,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     });
 
     engine.settings = { ...settings, autoAim: true };
+    engine.resizeViewport(initialSize.cssWidth, initialSize.cssHeight, initialSize.dpr);
     engineRef.current = engine;
     engine.initGame(shipId, gameMode, settings.difficulty);
     if (tutorialStep !== null) engine.pause();
@@ -83,8 +85,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const w = entry.contentRect.width || container.clientWidth || window.innerWidth;
         const h = entry.contentRect.height || container.clientHeight || window.innerHeight;
         if (w > 0 && h > 0 && canvasRef.current) {
-          canvasRef.current.width = w;
-          canvasRef.current.height = h;
+          const size = calculateCanvasSize(w, h, window.devicePixelRatio);
+          applyCanvasSize(canvasRef.current, size);
+          engineRef.current?.resizeViewport(size.cssWidth, size.cssHeight, size.dpr);
         }
       }
     });

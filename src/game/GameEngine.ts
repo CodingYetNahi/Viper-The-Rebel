@@ -20,12 +20,23 @@ import { ParticleSystem } from './particles';
 import { sound } from '../audio/soundEngine';
 import { selectAutomaticUpgrade } from './upgrades';
 import { predictiveIntercept, turnVelocityToward, validTarget } from './targeting';
+import { controlIntent } from './controls';
+import { frameDeltaSeconds } from './timing';
 
 export interface GameEngineCallbacks {
   onLevelUp: (level: number, upgrade: UpgradeOption) => void;
   onGameOver: (stats: PlayerStats, won: boolean) => void;
   onBossSpawn: (bossName: string) => void;
   onStatsUpdate: (stats: PlayerStats) => void;
+}
+
+export interface PerformanceSnapshot {
+  fps: number;
+  frameTimeMs: number;
+  enemies: number;
+  playerProjectiles: number;
+  enemyProjectiles: number;
+  particles: number;
 }
 
 export class GameEngine {
@@ -69,6 +80,10 @@ export class GameEngine {
   public mousePos: { x: number; y: number } = { x: 0, y: 0 };
   public isMouseDown: boolean = false;
   public joystickVector: { x: number; y: number } = { x: 0, y: 0 };
+  public viewportWidth: number;
+  public viewportHeight: number;
+  public renderDpr = 1;
+  public performanceSnapshot: PerformanceSnapshot | null = null;
 
   // Arena & camera
   public arenaWidth: number = 2400;
@@ -91,6 +106,8 @@ export class GameEngine {
   private targetLockUntil = 0;
   private colossusDamageCharge = 0;
   private lastDefensiveShockwave = -10;
+  private perfFrames = 0;
+  private perfElapsed = 0;
 
   private boundKeyDown: (e: KeyboardEvent) => void = () => {};
   private boundKeyUp: (e: KeyboardEvent) => void = () => {};
@@ -102,6 +119,8 @@ export class GameEngine {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
     this.callbacks = callbacks;
+    this.viewportWidth = canvas.clientWidth || canvas.width;
+    this.viewportHeight = canvas.clientHeight || canvas.height;
     this.particles = new ParticleSystem();
 
     this.currentShip = SHIPS.VIPER;
@@ -111,6 +130,12 @@ export class GameEngine {
     this.player.magnetRadius *= this.balance.magnetMultiplier;
 
     this.bindEvents();
+  }
+
+  public resizeViewport(width: number, height: number, dpr = 1) {
+    this.viewportWidth = Math.max(1, width);
+    this.viewportHeight = Math.max(1, height);
+    this.renderDpr = Math.max(1, dpr);
   }
 
   private createInitialPlayer(ship: ShipDefinition): PlayerStats {
@@ -309,8 +334,11 @@ export class GameEngine {
   private loop = (timestamp: number) => {
     if (!this.isRunning) return;
 
-    const dt = Math.min(0.05, (timestamp - this.lastTimestamp) / 1000);
+    const elapsed = Math.max(0, (timestamp - this.lastTimestamp) / 1000);
+    const dt = frameDeltaSeconds(timestamp, this.lastTimestamp);
     this.lastTimestamp = timestamp;
+
+    if (import.meta.env.DEV) this.updatePerformanceSnapshot(elapsed);
 
     if (!this.isPaused) {
       this.update(dt);
@@ -319,6 +347,23 @@ export class GameEngine {
     this.render();
     this.animationFrameId = requestAnimationFrame(this.loop);
   };
+
+  private updatePerformanceSnapshot(dt: number) {
+    this.perfFrames += 1;
+    this.perfElapsed += dt;
+    if (this.perfElapsed < 1) return;
+    const playerProjectiles = this.projectiles.reduce((count, projectile) => count + Number(projectile.source === 'PLAYER'), 0);
+    this.performanceSnapshot = {
+      fps: Math.round(this.perfFrames / this.perfElapsed),
+      frameTimeMs: Math.round((this.perfElapsed * 10000) / this.perfFrames) / 10,
+      enemies: this.enemies.length,
+      playerProjectiles,
+      enemyProjectiles: this.projectiles.length - playerProjectiles,
+      particles: this.particles.particles.length + this.particles.floatingTexts.length,
+    };
+    this.perfFrames = 0;
+    this.perfElapsed = 0;
+  }
 
   public pause() {
     if (this.isPaused) return;
@@ -380,10 +425,10 @@ export class GameEngine {
     this.particles.update(dt);
 
     // 6. Update Camera
-    this.camera.x = this.player.x - this.canvas.width / 2;
-    this.camera.y = this.player.y - this.canvas.height / 2;
-    this.camera.x = Math.max(0, Math.min(this.arenaWidth - this.canvas.width, this.camera.x));
-    this.camera.y = Math.max(0, Math.min(this.arenaHeight - this.canvas.height, this.camera.y));
+    this.camera.x = this.player.x - this.viewportWidth / 2;
+    this.camera.y = this.player.y - this.viewportHeight / 2;
+    this.camera.x = Math.max(0, Math.min(this.arenaWidth - this.viewportWidth, this.camera.x));
+    this.camera.y = Math.max(0, Math.min(this.arenaHeight - this.viewportHeight, this.camera.y));
 
     // 7. Update Combo
     if (this.player.combo > 0) {
@@ -399,25 +444,10 @@ export class GameEngine {
 
   private updatePlayer(dt: number) {
     // Movement Vector
-    let mx = 0;
-    let my = 0;
-
-    if (this.keys['KeyW'] || this.keys['ArrowUp']) my -= 1;
-    if (this.keys['KeyS'] || this.keys['ArrowDown']) my += 1;
-    if (this.keys['KeyA'] || this.keys['ArrowLeft']) mx -= 1;
-    if (this.keys['KeyD'] || this.keys['ArrowRight']) mx += 1;
-
-    // Mobile Joystick
-    if (this.joystickVector.x !== 0 || this.joystickVector.y !== 0) {
-      mx = this.joystickVector.x;
-      my = this.joystickVector.y;
-    }
-
+    const intent = controlIntent(this.keys, this.joystickVector);
+    const mx = intent.moveX;
+    const my = intent.moveY;
     const len = Math.hypot(mx, my);
-    if (len > 0.01) {
-      mx /= len;
-      my /= len;
-    }
 
     // Apply movement with acceleration/friction
     this.player.vx = mx * this.player.speed;
@@ -724,7 +754,7 @@ export class GameEngine {
   private spawnSingleEnemy(type: EnemyType, timeMinutes: number) {
     // Spawn in a ring outside camera viewport
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.max(this.canvas.width, this.canvas.height) * 0.65 + Math.random() * 150;
+    const distance = Math.max(this.viewportWidth, this.viewportHeight) * 0.65 + Math.random() * 150;
     const x = Math.max(40, Math.min(this.arenaWidth - 40, this.player.x + Math.cos(angle) * distance));
     const y = Math.max(40, Math.min(this.arenaHeight - 40, this.player.y + Math.sin(angle) * distance));
 
@@ -1357,8 +1387,10 @@ export class GameEngine {
   // --- RENDERING ---
   private render() {
     const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const w = this.viewportWidth;
+    const h = this.viewportHeight;
+
+    ctx.setTransform(this.renderDpr, 0, 0, this.renderDpr, 0, 0);
 
     ctx.save();
 
@@ -1403,9 +1435,9 @@ export class GameEngine {
   private renderGrid(ctx: CanvasRenderingContext2D) {
     const gridSize = 80;
     const startX = Math.floor(this.camera.x / gridSize) * gridSize;
-    const endX = this.camera.x + this.canvas.width + gridSize;
+    const endX = this.camera.x + this.viewportWidth + gridSize;
     const startY = Math.floor(this.camera.y / gridSize) * gridSize;
-    const endY = this.camera.y + this.canvas.height + gridSize;
+    const endY = this.camera.y + this.viewportHeight + gridSize;
 
     ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
     ctx.lineWidth = 1;
