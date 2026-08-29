@@ -4,7 +4,11 @@ import { getAuthErrorMessage, getFirebaseAuthErrorCode, reduceAuthRequestState }
 const expectedMessages: Record<string, RegExp> = {
   'auth/unauthorized-domain': /authorize this domain/i,
   'auth/operation-not-allowed': /enable the Google provider/i,
+  'auth/configuration-not-found': /not configured correctly/i,
+  'auth/app-not-authorized': /not authorized for this app/i,
   'auth/api-key-not-valid': /configuration is invalid/i,
+  'auth/invalid-api-key': /configuration is invalid/i,
+  'auth/internal-error': /Firebase service error/i,
   'auth/popup-blocked': /allow popups/i,
   'auth/popup-closed-by-user': /closed before sign-in finished/i,
   'auth/cancelled-popup-request': /already in progress/i,

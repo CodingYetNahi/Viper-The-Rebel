@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth';
+import {
+  User,
+  browserPopupRedirectResolver,
+  signInWithPopup,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
 import { 
   doc, 
   setDoc, 
@@ -140,13 +146,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsSigningIn(true);
     setAuthError(null);
     try {
-      await signInWithPopup(auth, googleAuthProvider);
+      await signInWithPopup(
+        auth,
+        googleAuthProvider,
+        browserPopupRedirectResolver
+      );
     } catch (error) {
       const code = getFirebaseAuthErrorCode(error);
-      setAuthError(getAuthErrorMessage(error));
-      if (import.meta.env.DEV) {
-        console.error('Google Sign-In failed.', { code: code ?? 'unknown' });
-      }
+      const message = getAuthErrorMessage(error);
+      setAuthError(message);
+      console.error('Google Sign-In failed.', {
+        code: code ?? 'unknown',
+        message,
+        hostname: window.location.hostname,
+        authDomain: auth.app.options.authDomain ?? 'unknown',
+      });
     } finally {
       signInInProgress.current = false;
       setIsSigningIn(false);
